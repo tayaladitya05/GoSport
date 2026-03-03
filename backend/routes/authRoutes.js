@@ -3,11 +3,21 @@ const router = express.Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User.js");
+const Player = require("../models/Player");
 
 // REGISTER
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { 
+      name, 
+      email, 
+      password, 
+      role,
+      sportType,
+      teamName,
+      playerRole,
+      jerseyNumber
+    } = req.body;
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -19,6 +29,19 @@ router.post("/register", async (req, res) => {
     });
 
     await user.save();
+
+    // 🔥 If role is player, create Player profile
+    if (role === "player") {
+      await Player.create({
+        user: user._id,
+        sportType,
+        teamName,
+        role: playerRole,
+        jerseyNumber,
+        createdBy: user._id   // temporary, can adjust later
+      });
+    }
+
     res.json({ message: "User registered successfully" });
 
   } catch (err) {
