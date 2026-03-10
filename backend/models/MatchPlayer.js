@@ -22,7 +22,14 @@ const matchPlayerSchema = new mongoose.Schema(
     isStarting: {
       type: Boolean,
       default: true
+    },
+    
+    availability: {
+      type: String,
+      enum: ["pending", "available", "not_available"],
+      default: "pending"
     }
+
   },
   { timestamps: true }
 );

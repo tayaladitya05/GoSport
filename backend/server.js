@@ -5,6 +5,7 @@ const cors = require("cors");
 const authRoutes = require("./routes/authRoutes");
 const matchRoutes = require("./routes/matchRoutes");
 const playerRoutes = require("./routes/playerRoutes");
+const statsRoutes = require("./routes/statsRoutes");
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.get("/", (req, res) => {
   res.send("GoSport Backend Running 🚀");
 });
 app.use("/api/players", playerRoutes);
+app.use("/api/stats", statsRoutes);
 
 // MongoDB Connection
 mongoose.connect("mongodb://127.0.0.1:27017/gosport")

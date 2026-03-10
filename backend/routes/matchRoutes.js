@@ -6,6 +6,10 @@ const router = express.Router();
 
 const { protect, adminOnly } = require("../middleware/authMiddleware");
 
+const CricketStat = require("../models/CricketStat");
+const FootballStat = require("../models/FootballStat");
+// const Match = require("../models/Match");
+
 /**
  * CREATE MATCH
  * POST /api/matches
@@ -65,6 +69,66 @@ router.get("/", async (req, res) => {
   try {
     const matches = await Match.find().sort({ createdAt: -1 });
     res.json(matches);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// PLAYER MARK AVAILABILITY
+router.put("/availability/:matchPlayerId", protect, async (req, res) => {
+  try {
+
+    const { availability } = req.body;
+
+    const matchPlayer = await MatchPlayer.findById(req.params.matchPlayerId);
+
+    if (!matchPlayer) {
+      return res.status(404).json({ message: "Entry not found" });
+    }
+
+    matchPlayer.availability = availability;
+
+    await matchPlayer.save();
+
+    res.json(matchPlayer);
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// GET MATCH SCORECARD
+router.get("/:matchId/scorecard", protect, async (req, res) => {
+  try {
+
+    const match = await Match.findById(req.params.matchId);
+
+    if (!match) {
+      return res.status(404).json({ message: "Match not found" });
+    }
+
+    let stats;
+
+    if (match.sportType === "cricket") {
+      stats = await CricketStat.find({ match: match._id })
+        .populate({
+          path: "player",
+          populate: { path: "user", select: "name" }
+        });
+    } 
+    else if (match.sportType === "football") {
+      stats = await FootballStat.find({ match: match._id })
+        .populate({
+          path: "player",
+          populate: { path: "user", select: "name" }
+        });
+    }
+
+    res.json({
+      match,
+      stats
+    });
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
