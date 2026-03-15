@@ -8,15 +8,45 @@ const { protect, adminOnly } = require("../middleware/authMiddleware");
 
 const CricketStat = require("../models/CricketStat");
 const FootballStat = require("../models/FootballStat");
-// const Match = require("../models/Match");
+const MatchScore = require("../models/MatchScore");
 
 /**
  * CREATE MATCH
  * POST /api/matches
+ * For cricket: create MatchScore per team (runs, wickets, overs).
+ * For football: create MatchScore per team (goals) so score updates work.
  */
 router.post("/", protect, adminOnly, async (req, res) => {
   try {
-    const match = await Match.create({...req.body,createdBy: req.user._id,});
+    const match = await Match.create({
+      ...req.body,
+      createdBy: req.user._id,
+    });
+
+    if (!match.teams || match.teams.length === 0) {
+      return res.status(201).json(match);
+    }
+
+    if (match.sportType === "cricket") {
+      await MatchScore.insertMany(
+        match.teams.map((teamName) => ({
+          match: match._id,
+          teamName,
+          runs: 0,
+          wickets: 0,
+          overs: 0,
+        }))
+      );
+    } else if (match.sportType === "football") {
+      await MatchScore.insertMany(
+        match.teams.map((teamName) => ({
+          match: match._id,
+          teamName,
+          goals: 0,
+        }))
+      );
+    }
+
     res.status(201).json(match);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -98,37 +128,85 @@ router.put("/availability/:matchPlayerId", protect, async (req, res) => {
 });
 
 // GET MATCH SCORECARD
+// Returns every playing player (from MatchPlayer) with their stats for this match.
+// Cricket: R, B, 4s, 6s, SR (+ wickets, overs for bowling). Football: goals, assists, etc.
 router.get("/:matchId/scorecard", protect, async (req, res) => {
   try {
-
     const match = await Match.findById(req.params.matchId);
 
     if (!match) {
       return res.status(404).json({ message: "Match not found" });
     }
 
+    // All players selected for this match (playing XI / squad)
+    const matchPlayers = await MatchPlayer.find({ match: match._id }).populate({
+      path: "player",
+      populate: { path: "user", select: "name" },
+    });
+
     let stats;
+    let playerScorecards = [];
 
     if (match.sportType === "cricket") {
-      stats = await CricketStat.find({ match: match._id })
-        .populate({
-          path: "player",
-          populate: { path: "user", select: "name" }
+      stats = await CricketStat.find({ match: match._id });
+      const statByPlayer = new Map(stats.map((s) => [s.player.toString(), s]));
+
+      for (const mp of matchPlayers) {
+        const p = mp.player;
+        const name = p?.user?.name ?? "Unknown";
+        const stat = statByPlayer.get(p._id.toString()) || {};
+        const runs = stat.runs ?? 0;
+        const balls = stat.ballsFaced ?? 0;
+        const strikeRate =
+          balls > 0 ? ((runs / balls) * 100).toFixed(2) : "0.00";
+
+        playerScorecards.push({
+          playerId: p._id,
+          playerName: name,
+          teamName: mp.teamName,
+          batting: {
+            runs,
+            balls,
+            fours: stat.fours ?? 0,
+            sixes: stat.sixes ?? 0,
+            strikeRate,
+          },
+          bowling: {
+            wickets: stat.wickets ?? 0,
+            overs: stat.overs ?? 0,
+          },
         });
-    } 
-    else if (match.sportType === "football") {
-      stats = await FootballStat.find({ match: match._id })
-        .populate({
-          path: "player",
-          populate: { path: "user", select: "name" }
+      }
+    } else if (match.sportType === "football") {
+      stats = await FootballStat.find({ match: match._id });
+      const statByPlayer = new Map(stats.map((s) => [s.player.toString(), s]));
+
+      for (const mp of matchPlayers) {
+        const p = mp.player;
+        const name = p?.user?.name ?? "Unknown";
+        const stat = statByPlayer.get(p._id.toString()) || {};
+
+        playerScorecards.push({
+          playerId: p._id,
+          playerName: name,
+          teamName: mp.teamName,
+          goals: stat.goals ?? 0,
+          assists: stat.assists ?? 0,
+          yellowCards: stat.yellowCards ?? 0,
+          redCards: stat.redCards ?? 0,
+          minutesPlayed: stat.minutesPlayed ?? 0,
         });
+      }
     }
+
+    const teamScores = await MatchScore.find({ match: match._id });
 
     res.json({
       match,
-      stats
+      stats,
+      teamScores,
+      playerScorecards,
     });
-
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

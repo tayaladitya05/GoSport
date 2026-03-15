@@ -48,4 +48,6 @@ const cricketStatSchema = new mongoose.Schema(
 { timestamps: true }
 );
 
+cricketStatSchema.index({ match: 1, player: 1 }, { unique: true });
+
 module.exports = mongoose.model("CricketStat", cricketStatSchema);

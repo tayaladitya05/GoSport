@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>GoSport – Socket.io test</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { color: #333; }
+    .status { padding: 0.5rem; border-radius: 6px; margin: 1rem 0; }
+    .connected { background: #d4edda; color: #155724; }
+    .disconnected { background: #f8d7da; color: #721c24; }
+    .event { background: #e7f3ff; border-left: 4px solid #2196F3; padding: 1rem; margin: 0.5rem 0; }
+    pre { background: #f5f5f5; padding: 0.75rem; overflow-x: auto; font-size: 0.9rem; }
+    p { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Socket.io test – live score updates</h1>
+  <p>This page connects to your backend and listens for <code>scoreUpdate</code> events. When you update a score (e.g. via Postman), the update will appear below.</p>
+
+  <div id="connectionStatus" class="status disconnected">Connecting…</div>
+
+  <h2>Last score update</h2>
+  <div id="lastUpdate">
+    <p><em>No update received yet.</em></p>
+    <p>Trigger an update by calling:</p>
+    <ul>
+      <li><strong>Cricket:</strong> <code>PUT /api/stats/cricket/update</code> with body: <code>{ "matchId", "playerId", "teamName", "runs" }</code></li>
+      <li><strong>Football:</strong> <code>PUT /api/stats/football/update</code> with body: <code>{ "matchId", "playerId", "teamName" }</code></li>
+    </ul>
+    <p>Use Postman (or similar) and send the request with a valid admin <code>Authorization: Bearer &lt;token&gt;</code> header.</p>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script>
+    const statusEl = document.getElementById("connectionStatus");
+    const lastUpdateEl = document.getElementById("lastUpdate");
+
+    // Connect to same host (e.g. http://localhost:5000)
+    const socket = io(window.location.origin);
+
+    socket.on("connect", () => {
+      statusEl.textContent = "Connected (Socket.io). Listening for scoreUpdate…";
+      statusEl.className = "status connected";
+    });
+
+    socket.on("disconnect", () => {
+      statusEl.textContent = "Disconnected.";
+      statusEl.className = "status disconnected";
+    });
+
+    socket.on("scoreUpdate", (data) => {
+      const pre = document.createElement("pre");
+      pre.textContent = JSON.stringify(data, null, 2);
+      const wrap = document.createElement("div");
+      wrap.className = "event";
+      wrap.innerHTML = "<strong>scoreUpdate received</strong>";
+      wrap.appendChild(pre);
+      lastUpdateEl.innerHTML = "";
+      lastUpdateEl.appendChild(wrap);
+    });
+  </script>
+</body>
+</html>

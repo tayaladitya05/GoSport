@@ -43,4 +43,6 @@ const footballStatSchema = new mongoose.Schema(
 { timestamps: true }
 );
 
+footballStatSchema.index({ match: 1, player: 1 }, { unique: true });
+
 module.exports = mongoose.model("FootballStat", footballStatSchema);
