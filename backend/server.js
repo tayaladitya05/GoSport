@@ -9,6 +9,7 @@ const authRoutes = require("./routes/authRoutes");
 const matchRoutes = require("./routes/matchRoutes");
 const playerRoutes = require("./routes/playerRoutes");
 const statsRoutes = require("./routes/statsRoutes");
+const publicRoutes = require("./routes/publicRoutes");
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/public", publicRoutes);
 app.use("/api/matches", matchRoutes);
 app.get("/", (req, res) => {
   res.send("GoSport Backend Running 🚀");

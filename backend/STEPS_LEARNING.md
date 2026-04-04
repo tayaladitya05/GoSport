@@ -90,6 +90,60 @@ This file explains what we do in each step so you can learn and follow along.
 2. Listen for the `scoreUpdate` event.
 3. When received, if the current page is showing that `matchId`, update the UI (team scores and optionally refetch the scorecard).
 
+---
+
+## Step 4: Public player skills API (DONE)
+
+### What we did
+
+1. **New route file `routes/publicRoutes.js`**
+   - **Why:** Logged-in routes live under `/api/players` with `protect`. Spectators and visitors should see a player’s career totals without signing up or sending a JWT.
+   - **What:** A small router mounted at `/api/public` so URLs clearly mean “no auth required”.
+
+2. **`GET /api/public/players/:playerId/skills`**
+   - **Response:**  
+     - `player`: public profile — `id`, `displayName` (from linked User’s `name`), `sportType`, `teamName`, `role`, `jerseyNumber`. No email or password.  
+     - `cricket`: career aggregates — `matches`, `runs`, `ballsFaced`, `fours`, `sixes`, `wickets`, `overs`.  
+     - `football`: career aggregates — `matches`, `goals`, `assists`, `yellowCards`, `redCards`, `minutesPlayed`.  
+   - **404** if the `playerId` is not a valid player document.
+
+3. **`server.js`**
+   - **`app.use("/api/public", publicRoutes)`** registered before other API routes so Express loads the public routes consistently.
+
+### How to test
+
+- Browser or Postman: `GET http://localhost:5000/api/public/players/<PLAYER_OBJECT_ID>/skills`  
+  No `Authorization` header needed.
+
+---
+
+## Step 5: AI squad selection (DONE)
+
+### What we did
+
+1. **`utils/aiSquad.js`**
+   - **Why:** Keep scoring rules in one place so you can read and change them later (they are not “black box” ML).
+   - **Cricket:** For each player we load **all** `CricketStat` rows (career). We aggregate runs, balls, fours, sixes, wickets, overs; then we compute a score based on `Player.role` (batsman vs bowler vs other = all‑round).  
+   - **Football:** Same idea with `FootballStat` — goals/match, assists/match, minutes, card penalty.
+   - **No stats yet:** If a player has zero career matches, we give a small **baseline score** so they still appear in the list (ranked lower than proven performers).
+
+2. **Fewer than 11 players**
+   - We take **`min(requestedSlots, 11, number of eligible players)`** so if you only have 6 players in the match squad, you get **6** suggestions, not a fake XI.
+
+3. **Routes (admin only)**
+   - `POST /api/matches/:matchId/ai-squad/cricket` — body optional: `{ "maxSlots": 11 }`  
+   - `POST /api/matches/:matchId/ai-squad/football` — same body  
+   - Only **MatchPlayer** rows for that match are considered; **players must match the sport** (`sportType` cricket or football).
+
+4. **Response shape**
+   - `requestedSlots`, `availablePlayers`, `filledSlots`, `squad` (ranked list with `score`, `reason`, `careerMatches`), and a human‑readable `message`.
+
+### How to test
+
+- **Cricket match:** `POST http://localhost:5000/api/matches/<CRICKET_MATCH_ID>/ai-squad/cricket`  
+  Headers: `Authorization: Bearer <admin token>`, `Content-Type: application/json`  
+  Body: `{}` or `{ "maxSlots": 11 }`
+
 ### Next step
 
-Step 4 will add a **public player stats API**: anyone (including non-logged-in users) can fetch a player’s career stats to “check the skills” of a player.
+Step 6 is the **frontend**: login (admin / player / spectator) and live score view using the APIs we built.
