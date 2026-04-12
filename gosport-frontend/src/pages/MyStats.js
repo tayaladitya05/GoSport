@@ -5,23 +5,27 @@ import api from '../utils/api';
 export default function MyStats() {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
-  const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get all players and find the one matching current user
-    api.get('/players').then(async (res) => {
-      setPlayers(res.data);
-      // Try each to find one with stats
-      // In production you'd have /api/players/me
-      if (res.data.length > 0) {
-        try {
-          const s = await api.get(`/players/${res.data[0]._id}/stats`);
-          setStats(s.data);
-        } catch {}
-      }
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    // Fetch the logged-in player's profile and their stats
+    api.get('/players/me')
+      .then(async (res) => {
+        const player = res.data;
+        if (player && player._id) {
+          try {
+            const s = await api.get(`/players/${player._id}/stats`);
+            setStats(s.data);
+          } catch (err) {
+            console.error("Error fetching stats:", err);
+          }
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching player profile:", err);
+        setLoading(false);
+      });
   }, []);
 
   if (loading) return <div className="spinner" style={{ marginTop: 80 }} />;
