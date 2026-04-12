@@ -33,12 +33,14 @@ router.post("/football", protect, adminOnly, async (req, res) => {
   }
 });
 
-//ADD MATCH SCORE
+// ADD MATCH SCORE
 router.put("/cricket/update", protect, adminOnly, async (req, res) => {
 
   try {
 
-    const { matchId, playerId, teamName, runs } = req.body;
+    const { matchId, playerId, teamName, runs, isWicket, wicketBowlerId } = req.body;
+    const runsNum = Number(runs) || 0;
+    const isWicketBool = Boolean(isWicket);
 
     // update player stats
     let playerStat = await CricketStat.findOne({
@@ -50,12 +52,28 @@ router.put("/cricket/update", protect, adminOnly, async (req, res) => {
       playerStat = new CricketStat({ match: matchId, player: playerId });
     }
 
-    playerStat.runs += runs;
+    playerStat.runs += runsNum;
     playerStat.ballsFaced += 1;
-    if (runs === 4) playerStat.fours += 1;
-    if (runs === 6) playerStat.sixes += 1;
+    if (runsNum === 4) playerStat.fours += 1;
+    if (runsNum === 6) playerStat.sixes += 1;
+    if (isWicketBool) {
+      playerStat.isOut = true;
+    }
 
     await playerStat.save();
+
+    // Increment bowler's wicket stat if a bowler is provided
+    if (isWicketBool && wicketBowlerId) {
+      let bowlerStat = await CricketStat.findOne({
+        match: matchId,
+        player: wicketBowlerId
+      });
+      if (!bowlerStat) {
+        bowlerStat = new CricketStat({ match: matchId, player: wicketBowlerId });
+      }
+      bowlerStat.wickets += 1;
+      await bowlerStat.save();
+    }
 
     let teamScore = await MatchScore.findOne({
       match: matchId,
@@ -72,7 +90,17 @@ router.put("/cricket/update", protect, adminOnly, async (req, res) => {
       });
     }
 
-    teamScore.runs += runs;
+    teamScore.runs += runsNum;
+    
+    if (isWicketBool) {
+      teamScore.wickets += 1;
+    }
+
+    // overs logic: calculate total balls, add 1, then rewrite
+    let totalBalls = Math.floor(teamScore.overs) * 6 + Math.round((teamScore.overs * 10) % 10);
+    totalBalls += 1;
+    teamScore.overs = Math.floor(totalBalls / 6) + (totalBalls % 6) / 10;
+
     await teamScore.save();
 
     // Real-time: notify all connected clients (spectators) so they see the update live
@@ -93,10 +121,10 @@ router.put("/cricket/update", protect, adminOnly, async (req, res) => {
   }
 });
 
-// UPDATE FOOTBALL MATCH SCORE (goal scored: update team total + scorer's stat)
+// UPDATE FOOTBALL MATCH SCORE
 router.put("/football/update", protect, adminOnly, async (req, res) => {
   try {
-    const { matchId, playerId, teamName } = req.body;
+    const { matchId, playerId, teamName, goals, assists, yellowCards, redCards, minutesPlayed } = req.body;
 
     let playerStat = await FootballStat.findOne({
       match: matchId,
@@ -107,7 +135,11 @@ router.put("/football/update", protect, adminOnly, async (req, res) => {
       playerStat = new FootballStat({ match: matchId, player: playerId });
     }
 
-    playerStat.goals += 1;
+    playerStat.goals += (Number(goals) || 0);
+    playerStat.assists += (Number(assists) || 0);
+    playerStat.yellowCards += (Number(yellowCards) || 0);
+    playerStat.redCards += (Number(redCards) || 0);
+    playerStat.minutesPlayed += (Number(minutesPlayed) || 0);
     await playerStat.save();
 
     let teamScore = await MatchScore.findOne({
@@ -123,7 +155,7 @@ router.put("/football/update", protect, adminOnly, async (req, res) => {
       });
     }
 
-    teamScore.goals += 1;
+    teamScore.goals += (Number(goals) || 0);
     await teamScore.save();
 
     // Real-time: notify all connected clients (spectators) so they see the update live

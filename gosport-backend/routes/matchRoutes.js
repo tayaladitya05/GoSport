@@ -101,7 +101,7 @@ router.get("/:matchId/players", protect, async (req, res) => {
  * AI squad suggestion (cricket) — admin only.
  * Ranks players in this match by career CricketStat; returns up to min(11, maxSlots, N).
  * POST /api/matches/:matchId/ai-squad/cricket
- * Body (optional): { "maxSlots": 11 }
+ * Body: { "maxSlots": 11, "teamName": "Team A" }
  */
 router.post("/:matchId/ai-squad/cricket", protect, adminOnly, async (req, res) => {
   try {
@@ -109,6 +109,7 @@ router.post("/:matchId/ai-squad/cricket", protect, adminOnly, async (req, res) =
       Number(req.body?.maxSlots) || DEFAULT_SQUAD_SIZE,
       DEFAULT_SQUAD_SIZE
     );
+    const targetTeam = req.body?.teamName;
 
     const match = await Match.findById(req.params.matchId);
     if (!match) {
@@ -124,7 +125,7 @@ router.post("/:matchId/ai-squad/cricket", protect, adminOnly, async (req, res) =
     });
 
     const candidates = matchPlayers.filter(
-      (mp) => mp.player && mp.player.sportType === "cricket"
+      (mp) => mp.player && mp.player.sportType === "cricket" && mp.teamName === targetTeam && !mp.isStarting
     );
 
     const ranked = [];
@@ -174,6 +175,7 @@ router.post("/:matchId/ai-squad/cricket", protect, adminOnly, async (req, res) =
 /**
  * AI squad suggestion (football) — admin only.
  * POST /api/matches/:matchId/ai-squad/football
+ * Body: { "maxSlots": 11, "teamName": "Team A" }
  */
 router.post("/:matchId/ai-squad/football", protect, adminOnly, async (req, res) => {
   try {
@@ -181,6 +183,7 @@ router.post("/:matchId/ai-squad/football", protect, adminOnly, async (req, res) 
       Number(req.body?.maxSlots) || DEFAULT_SQUAD_SIZE,
       DEFAULT_SQUAD_SIZE
     );
+    const targetTeam = req.body?.teamName;
 
     const match = await Match.findById(req.params.matchId);
     if (!match) {
@@ -196,7 +199,7 @@ router.post("/:matchId/ai-squad/football", protect, adminOnly, async (req, res) 
     });
 
     const candidates = matchPlayers.filter(
-      (mp) => mp.player && mp.player.sportType === "football"
+      (mp) => mp.player && mp.player.sportType === "football" && mp.teamName === targetTeam && !mp.isStarting
     );
 
     const ranked = [];
@@ -325,6 +328,25 @@ router.put("/matchplayer/:matchPlayerId", protect, adminOnly, async (req, res) =
   }
 });
 
+// BULK APPLY AI SQUAD TO PLAYING 11 (Admin Only)
+router.put("/:matchId/ai-squad-apply", protect, adminOnly, async (req, res) => {
+  try {
+    const { matchPlayerIds } = req.body;
+    if (!Array.isArray(matchPlayerIds)) {
+      return res.status(400).json({ message: "matchPlayerIds must be an array" });
+    }
+    
+    await MatchPlayer.updateMany(
+      { _id: { $in: matchPlayerIds }, match: req.params.matchId },
+      { $set: { isStarting: true } }
+    );
+    
+    res.json({ message: "Squad successfully applied to Starting 11." });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // PLAYER MARK AVAILABILITY
 router.put("/availability/:matchPlayerId", protect, async (req, res) => {
   try {
@@ -359,8 +381,8 @@ router.get("/:matchId/scorecard", protect, async (req, res) => {
       return res.status(404).json({ message: "Match not found" });
     }
 
-    // All players selected for this match (playing XI / squad)
-    const matchPlayers = await MatchPlayer.find({ match: match._id }).populate({
+    // All players selected for this match (playing XI only) for Scorecard
+    const matchPlayers = await MatchPlayer.find({ match: match._id, isStarting: true }).populate({
       path: "player",
       populate: { path: "user", select: "name" },
     });
@@ -391,6 +413,7 @@ router.get("/:matchId/scorecard", protect, async (req, res) => {
             fours: stat.fours ?? 0,
             sixes: stat.sixes ?? 0,
             strikeRate,
+            isOut: stat.isOut ?? false,
           },
           bowling: {
             wickets: stat.wickets ?? 0,

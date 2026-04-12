@@ -20,6 +20,16 @@ export default function MatchDetail() {
   
   const [selectedPlayerForStats, setSelectedPlayerForStats] = useState("");
   const [statsLoading, setStatsLoading] = useState(false);
+  const [runsInput, setRunsInput] = useState(0);
+  const [isWicketInput, setIsWicketInput] = useState(false);
+  const [wicketBowlerId, setWicketBowlerId] = useState("");
+  const [footballStats, setFootballStats] = useState({ goals: 0, assists: 0, yellowCards: 0, redCards: 0, minutesPlayed: 0 });
+  const [aiTeam, setAiTeam] = useState("");
+
+  const getOutPlayersIds = useCallback(() => {
+     if (!scorecard || match?.sportType !== 'cricket') return [];
+     return scorecard.playerScorecards.filter(p => p.batting?.isOut).map(p => p.playerId);
+  }, [scorecard, match]);
 
   const loadData = useCallback(async () => {
     try {
@@ -57,15 +67,29 @@ export default function MatchDetail() {
 
   const getAiSquad = async () => {
     if (!match) return;
+    if (!aiTeam) { setTab('ai-squad'); return alert('Select a team to generate squad for'); }
     setAiLoading(true);
     try {
-      const res = await api.post(`/matches/${id}/ai-squad/${match.sportType}`);
+      const res = await api.post(`/matches/${id}/ai-squad/${match.sportType}`, { teamName: aiTeam });
       setAiSquad(res.data);
       setTab('ai-squad');
     } catch (e) {
       alert(e.response?.data?.message || 'AI squad failed');
     }
     setAiLoading(false);
+  };
+
+  const applyAiSquad = async () => {
+     if(!aiSquad || !aiSquad.squad) return;
+     const matchPlayerIds = aiSquad.squad.map(p => p.matchPlayerId);
+     try {
+       await api.put(`/matches/${id}/ai-squad-apply`, { matchPlayerIds });
+       alert("Squad applied to Playing 11!");
+       setAiSquad(null);
+       loadData();
+     } catch (e) {
+       alert(e.response?.data?.message || 'Failed to apply squad');
+     }
   };
 
   const handleStatusChange = async (e) => {
@@ -88,16 +112,16 @@ export default function MatchDetail() {
     }
   };
 
-  const assignPlayer = async (matchPlayerId, teamName) => {
+  const assignPlayer = async (matchPlayerId, teamName, isStarting = false) => {
     try {
-      await api.put(`/matches/matchplayer/${matchPlayerId}`, { teamName, isStarting: true });
+      await api.put(`/matches/matchplayer/${matchPlayerId}`, { teamName, isStarting });
       loadData();
     } catch (error) {
       alert("Error assigning player");
     }
   };
 
-  const handleUpdateScore = async (runs) => {
+  const handleUpdateScore = async () => {
     if (!selectedPlayerForStats) return alert("Select a player first");
     const p = players.find(x => x.player._id === selectedPlayerForStats);
     setStatsLoading(true);
@@ -107,15 +131,22 @@ export default function MatchDetail() {
             matchId: match._id,
             playerId: selectedPlayerForStats,
             teamName: p.teamName,
-            runs: runs
+            runs: Number(runsInput),
+            isWicket: isWicketInput,
+            wicketBowlerId: isWicketInput ? wicketBowlerId : null
           });
        } else {
           await api.put(`/stats/football/update`, {
             matchId: match._id,
             playerId: selectedPlayerForStats,
-            teamName: p.teamName
+            teamName: p.teamName,
+            ...footballStats
           });
        }
+       setRunsInput(0);
+       setIsWicketInput(false);
+       setWicketBowlerId("");
+       setFootballStats({ goals: 0, assists: 0, yellowCards: 0, redCards: 0, minutesPlayed: 0 });
        loadData();
     } catch(e) {
        alert("Failed to update score");
@@ -126,7 +157,7 @@ export default function MatchDetail() {
   if (loading) return <div className="spinner" style={{ marginTop: 80 }} />;
   if (!match) return <div className="container" style={{ paddingTop: 60 }}><p style={{ color: 'var(--text-muted)' }}>Match not found.</p></div>;
 
-  const tabs = ['overview', 'players', ...(scorecard ? ['scorecard'] : []), ...(user?.role === 'admin' ? ['ai-squad'] : [])];
+  const tabs = ['overview', 'squads', ...(scorecard ? ['scorecard'] : []), ...(user?.role === 'admin' ? ['ai-squad'] : [])];
 
   return (
     <div className="container page-fade" style={{ paddingTop: 36, paddingBottom: 60 }}>
@@ -145,11 +176,11 @@ export default function MatchDetail() {
                    value={match.status} 
                    onChange={handleStatusChange} 
                    className={`badge badge-${match.status}`}
-                   style={{ background: 'transparent', cursor: 'pointer', outline: 'none' }}
+                   style={{ cursor: 'pointer', outline: 'none' }}
                 >
-                   <option value="upcoming" style={{ color: 'black' }}>Upcoming</option>
-                   <option value="live" style={{ color: 'black' }}>Live</option>
-                   <option value="completed" style={{ color: 'black' }}>Completed</option>
+                   <option value="upcoming" style={{ background: 'var(--bg2)', color: 'var(--text)' }}>Upcoming</option>
+                   <option value="live" style={{ background: 'var(--bg2)', color: 'var(--text)' }}>Live</option>
+                   <option value="completed" style={{ background: 'var(--bg2)', color: 'var(--text)' }}>Completed</option>
                 </select>
               ) : (
                 <span className={`badge badge-${match.status}`}>
@@ -211,19 +242,37 @@ export default function MatchDetail() {
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                <select className="input" value={selectedPlayerForStats} onChange={(e) => setSelectedPlayerForStats(e.target.value)} style={{ padding: '8.5px 12px', minWidth: 200, fontSize: 14 }}>
                   <option value="">-- Select Player --</option>
-                  {players.filter(p => p.teamName !== 'Unassigned').map(p => (
+                  {players.filter(p => p.teamName !== 'Unassigned' && !getOutPlayersIds().includes(p.player._id)).map(p => (
                      <option key={p.player._id} value={p.player._id}>{p.player.user?.name || "Unknown"} ({p.teamName})</option>
                   ))}
                </select>
                
                {match.sportType === 'cricket' ? (
                   <>
-                     <button className="btn btn-primary" disabled={statsLoading} onClick={() => handleUpdateScore(1)}>+1 Run</button>
-                     <button className="btn btn-primary" disabled={statsLoading} onClick={() => handleUpdateScore(4)}>+4</button>
-                     <button className="btn btn-primary" disabled={statsLoading} onClick={() => handleUpdateScore(6)}>+6</button>
+                     <input type="number" className="input" placeholder="Runs" value={runsInput} onChange={e=>setRunsInput(e.target.value)} style={{ width: 80 }} />
+                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
+                        <input type="checkbox" checked={isWicketInput} onChange={e=>setIsWicketInput(e.target.checked)} />
+                        Wicket
+                     </label>
+                     {isWicketInput && (
+                        <select className="input" value={wicketBowlerId} onChange={e => setWicketBowlerId(e.target.value)} style={{ padding: '8.5px 12px', width: 140, fontSize: 14 }}>
+                           <option value="">-- Bowler --</option>
+                           {players.filter(p => p.teamName !== 'Unassigned' && selectedPlayerForStats && p.teamName !== players.find(x => x.player._id === selectedPlayerForStats)?.teamName).map(p => (
+                              <option key={p.player._id} value={p.player._id}>{p.player.user?.name || "Unknown"}</option>
+                           ))}
+                        </select>
+                     )}
+                     <button className="btn btn-primary" disabled={statsLoading} onClick={handleUpdateScore}>Update Ball</button>
                   </>
                ) : (
-                  <button className="btn btn-primary" disabled={statsLoading} onClick={() => handleUpdateScore()}>⚽ Goal</button>
+                  <>
+                     <input type="number" className="input" placeholder="G" value={footballStats.goals} onChange={e=>setFootballStats({...footballStats, goals: e.target.value})} style={{ width: 60 }} title="Goals" />
+                     <input type="number" className="input" placeholder="A" value={footballStats.assists} onChange={e=>setFootballStats({...footballStats, assists: e.target.value})} style={{ width: 60 }} title="Assists" />
+                     <input type="number" className="input" placeholder="Y" value={footballStats.yellowCards} onChange={e=>setFootballStats({...footballStats, yellowCards: e.target.value})} style={{ width: 60 }} title="Yellow Cards" />
+                     <input type="number" className="input" placeholder="R" value={footballStats.redCards} onChange={e=>setFootballStats({...footballStats, redCards: e.target.value})} style={{ width: 60 }} title="Red Cards" />
+                     <input type="number" className="input" placeholder="Min" value={footballStats.minutesPlayed} onChange={e=>setFootballStats({...footballStats, minutesPlayed: e.target.value})} style={{ width: 70 }} title="Minutes Played" />
+                     <button className="btn btn-primary" disabled={statsLoading} onClick={handleUpdateScore}>Update Stats</button>
+                  </>
                )}
             </div>
          </div>
@@ -263,122 +312,139 @@ export default function MatchDetail() {
         </div>
       )}
 
-      {/* Tab: Players */}
-      {tab === 'players' && (
-        players.length === 0 ? (
-          <div className="empty"><h3>No players added</h3><p>Admin can add players, or players can mark availability to join the pool.</p></div>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Player</th>
-                  <th>Team</th>
-                  <th>Role</th>
-                  <th>Sport</th>
-                  <th>Availability</th>
-                  {user?.role === 'admin' && <th>Action</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {players.map(mp => (
-                  <tr key={mp._id}>
-                    <td style={{ fontWeight: 600 }}>{mp.player?.user?.name || '—'}</td>
-                    <td>{mp.teamName}</td>
-                    <td style={{ textTransform: 'capitalize' }}>{mp.player?.role || '—'}</td>
-                    <td><span className={`badge badge-${mp.player?.sportType}`}>{mp.player?.sportType}</span></td>
-                    <td>
-                      <span style={{ color: mp.availability === 'available' ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600, textTransform: 'capitalize', fontSize: 13 }}>
-                        {mp.availability || 'pending'}
-                      </span>
-                    </td>
-                    {user?.role === 'admin' && (
-                      <td>
-                        {mp.teamName === 'Unassigned' && mp.availability === 'available' ? (
-                           <div style={{ display: 'flex', gap: 6 }}>
-                             {match.teams.map((t) => (
-                               <button key={t} className="btn btn-sm btn-outline" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => assignPlayer(mp._id, t)}>{t}</button>
-                             ))}
-                           </div>
-                        ) : (
-                           <span style={{color:'var(--text-muted)', fontSize: 12}}>—</span>
-                        )}
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )
+      {/* Tab: Squads */}
+      {tab === 'squads' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 30 }}>
+            {['Unassigned', ...(match.teams || [])].map((teamGroup) => {
+               const teamPlayers = players.filter(p => p.teamName === teamGroup);
+               if (teamPlayers.length === 0) return null;
+               
+               return (
+                  <div key={teamGroup} className="card" style={{ borderColor: teamGroup === 'Unassigned' ? 'var(--border)' : 'var(--orange)' }}>
+                     <h3 style={{ marginBottom: 16 }}>{teamGroup === 'Unassigned' ? 'Available Players' : teamGroup + ' Squad'}</h3>
+                     <div className="table-wrap" style={{ margin: 0, border: 'none' }}>
+                        <table>
+                           <thead>
+                              <tr>
+                                 <th>Player</th>
+                                 <th>Role</th>
+                                 <th>Status</th>
+                                 {user?.role === 'admin' && <th>Action</th>}
+                              </tr>
+                           </thead>
+                           <tbody>
+                              {teamPlayers.map(mp => (
+                                 <tr key={mp._id}>
+                                    <td style={{ fontWeight: 600 }}>{mp.player?.user?.name || '—'}</td>
+                                    <td style={{ textTransform: 'capitalize' }}>{mp.player?.role || '—'}</td>
+                                    <td>
+                                       {mp.isStarting ? (
+                                          <span className="badge badge-success">Playing 11</span>
+                                       ) : (
+                                          <span className="badge badge-neutral">Squad</span>
+                                       )}
+                                    </td>
+                                    {user?.role === 'admin' && (
+                                       <td>
+                                          {teamGroup === 'Unassigned' ? (
+                                             <div style={{ display: 'flex', gap: 6 }}>
+                                                {match.teams.map((t) => (
+                                                   <button key={t} className="btn btn-sm btn-outline" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => assignPlayer(mp._id, t)}>Add to {t}</button>
+                                                ))}
+                                             </div>
+                                          ) : (
+                                             !mp.isStarting && (
+                                                <button className="btn btn-sm btn-primary" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => assignPlayer(mp._id, teamGroup, true)}>Add to Playing 11</button>
+                                             )
+                                          )}
+                                       </td>
+                                    )}
+                                 </tr>
+                              ))}
+                           </tbody>
+                        </table>
+                     </div>
+                  </div>
+               )
+            })}
+        </div>
       )}
 
       {/* Tab: Scorecard */}
       {tab === 'scorecard' && scorecard && (
-        <div>
-          {match.sportType === 'cricket' ? (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Player</th>
-                    <th>Team</th>
-                    <th>Runs</th>
-                    <th>Balls</th>
-                    <th>4s</th>
-                    <th>6s</th>
-                    <th>SR</th>
-                    <th>Wkts</th>
-                    <th>Overs</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scorecard.playerScorecards?.map((p, i) => (
-                    <tr key={i}>
-                      <td style={{ fontWeight: 600 }}>{p.playerName}</td>
-                      <td>{p.teamName}</td>
-                      <td style={{ color: 'var(--orange)', fontWeight: 700 }}>{p.batting.runs}</td>
-                      <td>{p.batting.balls}</td>
-                      <td>{p.batting.fours}</td>
-                      <td>{p.batting.sixes}</td>
-                      <td>{p.batting.strikeRate}</td>
-                      <td>{p.bowling.wickets}</td>
-                      <td>{p.bowling.overs}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Player</th>
-                    <th>Team</th>
-                    <th>Goals</th>
-                    <th>Assists</th>
-                    <th>Yellow</th>
-                    <th>Red</th>
-                    <th>Minutes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scorecard.playerScorecards?.map((p, i) => (
-                    <tr key={i}>
-                      <td style={{ fontWeight: 600 }}>{p.playerName}</td>
-                      <td>{p.teamName}</td>
-                      <td style={{ color: 'var(--orange)', fontWeight: 700 }}>{p.goals}</td>
-                      <td>{p.assists}</td>
-                      <td>{p.yellowCards}</td>
-                      <td>{p.redCards}</td>
-                      <td>{p.minutesPlayed}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 30 }}>
+          {match.teams?.map(team => {
+             const teamScorecards = scorecard.playerScorecards?.filter(p => p.teamName === team) || [];
+             if (teamScorecards.length === 0) return null;
+             
+             return (
+               <div key={team} className="card">
+                 <h3 style={{ marginBottom: 16 }}>{team} Playing 11</h3>
+                 <div className="table-wrap">
+                   <table>
+                     {match.sportType === 'cricket' ? (
+                        <>
+                           <thead>
+                             <tr>
+                               <th>Player</th>
+                               <th>Runs</th>
+                               <th>Balls</th>
+                               <th>4s</th>
+                               <th>6s</th>
+                               <th>SR</th>
+                               <th>Wkts</th>
+                               <th>Overs</th>
+                             </tr>
+                           </thead>
+                           <tbody>
+                             {teamScorecards.map((p, i) => (
+                               <tr key={i} style={{ opacity: p.batting?.isOut ? 0.6 : 1 }}>
+                                 <td style={{ fontWeight: 600 }}>
+                                    {p.playerName}
+                                    {p.batting?.isOut && <span style={{fontSize: 11, color: 'var(--red)', marginLeft: 6, fontWeight: 700}}>(OUT)</span>}
+                                 </td>
+                                 <td style={{ color: 'var(--orange)', fontWeight: 700 }}>{p.batting.runs}</td>
+                                 <td>{p.batting.balls}</td>
+                                 <td>{p.batting.fours}</td>
+                                 <td>{p.batting.sixes}</td>
+                                 <td>{p.batting.strikeRate}</td>
+                                 <td>{p.bowling.wickets}</td>
+                                 <td>{p.bowling.overs}</td>
+                               </tr>
+                             ))}
+                           </tbody>
+                        </>
+                     ) : (
+                        <>
+                           <thead>
+                             <tr>
+                               <th>Player</th>
+                               <th>Goals</th>
+                               <th>Assists</th>
+                               <th>Yellow</th>
+                               <th>Red</th>
+                               <th>Minutes</th>
+                             </tr>
+                           </thead>
+                           <tbody>
+                             {teamScorecards.map((p, i) => (
+                               <tr key={i}>
+                                 <td style={{ fontWeight: 600 }}>{p.playerName}</td>
+                                 <td style={{ color: 'var(--orange)', fontWeight: 700 }}>{p.goals}</td>
+                                 <td>{p.assists}</td>
+                                 <td>{p.yellowCards}</td>
+                                 <td>{p.redCards}</td>
+                                 <td>{p.minutesPlayed}</td>
+                               </tr>
+                             ))}
+                           </tbody>
+                        </>
+                     )}
+                   </table>
+                 </div>
+               </div>
+             )
+          })}
         </div>
       )}
 
@@ -389,12 +455,19 @@ export default function MatchDetail() {
             <div className="empty">
               <h3>AI Squad</h3>
               <p style={{ marginBottom: 16 }}>Get AI-powered squad suggestions based on player career stats</p>
-              <button className="btn btn-primary" onClick={getAiSquad} disabled={aiLoading}>{aiLoading ? 'Analyzing...' : '🤖 Generate Squad'}</button>
+              <div style={{ display: 'flex', gap: 10 }}>
+                 <select className="input" value={aiTeam} onChange={e=>setAiTeam(e.target.value)} style={{ padding: '8.5px 12px', minWidth: 200, fontSize: 14 }}>
+                    <option value="">-- Select Team --</option>
+                    {match.teams?.map(t => <option key={t} value={t}>{t}</option>)}
+                 </select>
+                 <button className="btn btn-primary" onClick={getAiSquad} disabled={aiLoading}>{aiLoading ? 'Analyzing...' : '🤖 Generate Squad'}</button>
+              </div>
             </div>
           ) : (
             <div>
               <div style={{ background: 'var(--orange-glow)', border: '1px solid var(--orange)', borderRadius: 8, padding: '12px 16px', marginBottom: 20, fontSize: 14, color: 'var(--orange)' }}>
                 🤖 {aiSquad.message}
+                <button className="btn btn-sm btn-primary" style={{ marginLeft: 16 }} onClick={applyAiSquad}>Apply All to Playing 11</button>
               </div>
               <div className="table-wrap">
                 <table>

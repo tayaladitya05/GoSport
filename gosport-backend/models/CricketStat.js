@@ -42,6 +42,11 @@ const cricketStatSchema = new mongoose.Schema(
   overs: {
     type: Number,
     default: 0
+  },
+
+  isOut: {
+    type: Boolean,
+    default: false
   }
 
 },
