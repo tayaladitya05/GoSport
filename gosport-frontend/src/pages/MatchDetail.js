@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import io from 'socket.io-client';
 
-const API_BASE = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
+const API_BASE = process.env.REACT_APP_API_URL?.replace('/api', '') || `http://${window.location.hostname}:5000`;
 
 export default function MatchDetail() {
   const { id } = useParams();
@@ -60,10 +60,16 @@ export default function MatchDetail() {
     socket.on('scoreUpdate', (data) => {
       if (data.matchId === id) {
         setTeamScores(data.teamScores);
+        if (token) {
+          // Silently re-fetch scorecard layout for latest player stats
+          api.get(`/matches/${id}/scorecard`).then(sc => {
+            setScorecard(sc.data);
+          }).catch(()=>{});
+        }
       }
     });
     return () => socket.disconnect();
-  }, [match, id]);
+  }, [match, id, token]);
 
   const getAiSquad = async () => {
     if (!match) return;

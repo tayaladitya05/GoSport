@@ -9,7 +9,7 @@ export default function PlayerStats() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+    const BASE = process.env.REACT_APP_API_URL || `http://${window.location.hostname}:5000/api`;
     Promise.all([
       api.get(`/players/${id}/stats`),
       // Change 5: use public endpoint to get player name & profile

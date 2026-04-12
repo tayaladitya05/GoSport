@@ -13,7 +13,7 @@ export default function Players() {
     // Fetch players list; also fetch public skills to get player names
     // The /api/players endpoint returns player docs; we also hit /api/public/players/:id/skills
     // to get displayName. We'll do a combined fetch.
-    const BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+    const BASE = process.env.REACT_APP_API_URL || `http://${window.location.hostname}:5000/api`;
 
     api.get('/players').then(async (res) => {
       const rawPlayers = res.data;
