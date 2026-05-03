@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
 
-# Environment variables (never commit real secrets!)
+# Environment variables
 .env
 
 # Logs and OS
