@@ -1,20 +1,23 @@
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Player = require("../models/Player");
-const { sendVerificationEmail } = require("../utils/sendEmail");
+const { sendEmail } = require("../utils/sendEmail");
+const { cookieOptions, clearCookieOptions } = require("../utils/authCookie");
+
+const USER_PUBLIC_SELECT =
+  "-password -verificationToken -verificationExpires -resetPasswordToken -resetPasswordExpires";
 
 function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-function createVerificationToken() {
+function createEmailToken() {
   const token = crypto.randomBytes(32).toString("hex");
   return {
     token,
     hashed: hashToken(token),
-    expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    expires: new Date(Date.now() + 60 * 60 * 1000),
   };
 }
 
@@ -23,16 +26,20 @@ function frontendBaseUrl() {
 }
 
 async function issueVerificationEmail(user) {
-  const { token, hashed, expires } = createVerificationToken();
+  const { token, hashed, expires } = createEmailToken();
   user.verificationToken = hashed;
   user.verificationExpires = expires;
   await user.save();
 
-  const verifyUrl = `${frontendBaseUrl()}/verify-email?token=${token}`;
-  await sendVerificationEmail({
+  await sendEmail({
     to: user.email,
     name: user.name,
-    verifyUrl,
+    subject: "Verify your GoSport spectator account",
+    intro: "Welcome to GoSport. Confirm your email to finish creating your spectator account.",
+    instructions: "Click the button below to verify your email. This link expires in 1 hour.",
+    buttonText: "Verify email",
+    link: `${frontendBaseUrl()}/verify-email?token=${token}`,
+    outro: "If you did not sign up, you can ignore this email.",
   });
 }
 
@@ -60,7 +67,7 @@ exports.register = async (req, res) => {
     if (existing) {
       return res.status(400).json({ message: "An account with this email already exists" });
     }
-
+    
     const hashedPassword = await bcrypt.hash(password, 10);
     const isSpectator = role === "spectator";
 
@@ -114,18 +121,26 @@ exports.register = async (req, res) => {
   }
 };
 
-// @desc    Authenticate user & get token
+// @desc    Authenticate user, set accessToken cookie
 // @route   POST /api/auth/login
 // @access  Public
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: "User not found" });
+    if (!email) {
+      return res.status(400).json({ message: "email is required" });
+    }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid password" });
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "user not found" });
+    }
+
+    const isPasswordValid = await user.isPasswordCorrect(password);
+    if (!isPasswordValid) {
+      return res.status(400).json({ message: "password is incorrect" });
+    }
 
     if (user.role === "spectator" && user.isVerified === false) {
       return res.status(403).json({
@@ -134,17 +149,18 @@ exports.login = async (req, res) => {
       });
     }
 
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET || "dev-secret-change-in-production",
-      { expiresIn: "1d" }
-    );
+    const accessToken = user.generateAccessToken();
+    const loggedinUser = await User.findById(user._id).select(USER_PUBLIC_SELECT);
 
-    res.json({
-      token,
-      role: user.role
-    });
+    const options = cookieOptions();
 
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .json({
+        message: "user loggedin successfully",
+        user: loggedinUser,
+      });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -206,5 +222,115 @@ exports.resendVerification = async (req, res) => {
   } catch (err) {
     console.error("Resend verification failed:", err.message);
     res.status(500).json({ message: "Could not send verification email. Check SMTP settings." });
+  }
+};
+
+// @desc    Current user from cookie or Authorization header
+// @route   GET /api/auth/me
+// @access  Private
+exports.getMe = async (req, res) => {
+  const user = await User.findById(req.user._id).select(USER_PUBLIC_SELECT);
+  res.json({ user });
+};
+
+// @desc    Invalidate access token and clear cookie
+// @route   POST /api/auth/logout
+// @access  Private
+exports.logout = async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(
+      req.user._id,
+      { $inc: { tokenVersion: 1 } },
+      { new: true }
+    );
+
+    const options = clearCookieOptions();
+
+    return res
+      .status(200)
+      .clearCookie("accessToken", options)
+      .json({ message: "user logged out successfully" });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+const FORGOT_PASSWORD_MESSAGE =
+  "If that email is registered, we sent a password reset link.";
+
+// @desc    Email a password reset link
+// @route   POST /api/auth/forgot-password
+// @access  Public
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.json({ message: FORGOT_PASSWORD_MESSAGE });
+    }
+
+    const { token, hashed, expires } = createEmailToken();
+    user.resetPasswordToken = hashed;
+    user.resetPasswordExpires = expires;
+    await user.save();
+
+    try {
+      await sendEmail({
+        to: user.email,
+        name: user.name,
+        subject: "Reset your GoSport password",
+        intro: "You requested a password reset for your GoSport account.",
+        instructions: "Click the button below to choose a new password. This link expires in 1 hour.",
+        buttonText: "Reset password",
+        link: `${frontendBaseUrl()}/reset-password?token=${token}`,
+        outro: "If you did not request this, you can ignore this email. Your password will stay the same.",
+      });
+    } catch (mailErr) {
+      console.error("Reset password email failed:", mailErr.message);
+      user.resetPasswordToken = null;
+      user.resetPasswordExpires = null;
+      await user.save();
+      return res.status(500).json({ message: "Could not send reset email. Check SMTP settings." });
+    }
+
+    return res.json({ message: FORGOT_PASSWORD_MESSAGE });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// @desc    Set a new password using the reset link token
+// @route   POST /api/auth/reset-password
+// @access  Public
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token) {
+      return res.status(400).json({ message: "Reset token is missing" });
+    }
+    if (!password || password.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
+    const hashed = hashToken(token);
+    const user = await User.findOne({
+      resetPasswordToken: hashed,
+      resetPasswordExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: "This reset link is invalid or has expired" });
+    }
+
+    user.password = await bcrypt.hash(password, 10);
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    await user.save();
+
+    res.json({ message: "Password updated. You can now sign in." });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 };

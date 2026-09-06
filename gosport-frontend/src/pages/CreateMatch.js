@@ -5,24 +5,36 @@ import api from '../utils/api';
 export default function CreateMatch() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
-    matchName: '', sportType: 'cricket', venue: '', matchDate: '',
-    status: 'upcoming', team1: '', team2: '',
+    matchName: '', sportType: 'cricket', venue: '', matchDate: '', matchTime: '',
+    team1: '', team2: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const today = new Date().toLocaleDateString('en-CA');
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
+      const kickoff = new Date(`${form.matchDate}T${form.matchTime}`);
+      if (Number.isNaN(kickoff.getTime())) {
+        setError('Please choose a valid date and start time');
+        setLoading(false);
+        return;
+      }
+      if (kickoff.getTime() < Date.now()) {
+        setError('Match start time cannot be in the past');
+        setLoading(false);
+        return;
+      }
       await api.post('/matches', {
         matchName: form.matchName,
         sportType: form.sportType,
         venue: form.venue,
-        matchDate: form.matchDate,
-        status: form.status,
+        matchDate: kickoff.toISOString(),
         teams: [form.team1, form.team2].filter(Boolean),
       });
       navigate('/matches');
@@ -56,24 +68,24 @@ export default function CreateMatch() {
                 </select>
               </div>
               <div className="form-group">
-                <label className="label">Status</label>
-                <select className="select" value={form.status} onChange={e => set('status', e.target.value)}>
-                  <option value="upcoming">Upcoming</option>
-                  <option value="live">Live</option>
-                  <option value="completed">Completed</option>
-                </select>
+                <label className="label">Venue</label>
+                <input className="input" placeholder="e.g. Wankhede Stadium" value={form.venue} onChange={e => set('venue', e.target.value)} required />
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="label">Venue</label>
-              <input className="input" placeholder="e.g. Wankhede Stadium" value={form.venue} onChange={e => set('venue', e.target.value)} required />
+            <div className="grid-2">
+              <div className="form-group">
+                <label className="label">Match Date</label>
+                <input className="input" type="date" min={today} value={form.matchDate} onChange={e => set('matchDate', e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label className="label">Start Time</label>
+                <input className="input" type="time" value={form.matchTime} onChange={e => set('matchTime', e.target.value)} required />
+              </div>
             </div>
-
-            <div className="form-group">
-              <label className="label">Match Date</label>
-              <input className="input" type="date" value={form.matchDate} onChange={e => set('matchDate', e.target.value)} required />
-            </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: -8, marginBottom: 16 }}>
+              Status becomes live at this time, then completed 5 hours later.
+            </p>
 
             <div className="divider" />
             <p style={{ color: 'var(--orange)', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16 }}>Teams</p>

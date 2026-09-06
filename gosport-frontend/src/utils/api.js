@@ -2,12 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || `http://${window.location.hostname}:5000/api`,
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('gosport_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
+  withCredentials: true,
 });
 
 export default api;

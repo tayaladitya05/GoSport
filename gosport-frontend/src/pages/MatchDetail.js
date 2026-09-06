@@ -8,7 +8,7 @@ const API_BASE = process.env.REACT_APP_API_URL?.replace('/api', '') || `http://$
 
 export default function MatchDetail() {
   const { id } = useParams();
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [match, setMatch] = useState(null);
   const [scorecard, setScorecard] = useState(null);
   const [players, setPlayers] = useState([]);
@@ -35,12 +35,12 @@ export default function MatchDetail() {
     try {
       const [matchRes, playersRes] = await Promise.all([
         api.get(`/matches`),
-        token ? api.get(`/matches/${id}/players`) : Promise.resolve({ data: [] }),
+        user ? api.get(`/matches/${id}/players`) : Promise.resolve({ data: [] }),
       ]);
       const m = matchRes.data.find(x => x._id === id);
       setMatch(m);
       setPlayers(playersRes.data);
-      if (token) {
+      if (user) {
         try {
           const sc = await api.get(`/matches/${id}/scorecard`);
           setScorecard(sc.data);
@@ -49,7 +49,7 @@ export default function MatchDetail() {
       }
     } catch {}
     setLoading(false);
-  }, [id, token]);
+  }, [id, user]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -60,7 +60,7 @@ export default function MatchDetail() {
     socket.on('scoreUpdate', (data) => {
       if (data.matchId === id) {
         setTeamScores(data.teamScores);
-        if (token) {
+        if (user) {
           // Silently re-fetch scorecard layout for latest player stats
           api.get(`/matches/${id}/scorecard`).then(sc => {
             setScorecard(sc.data);
@@ -69,7 +69,7 @@ export default function MatchDetail() {
       }
     });
     return () => socket.disconnect();
-  }, [match, id, token]);
+  }, [match, id, user]);
 
   const getAiSquad = async () => {
     if (!match) return;
@@ -197,7 +197,7 @@ export default function MatchDetail() {
               <span className={`badge badge-${match.sportType}`}>{match.sportType}</span>
             </div>
             <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '2rem', letterSpacing: '0.04em', marginBottom: 6 }}>{match.matchName}</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>📍 {match.venue} · 📅 {new Date(match.matchDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>📍 {match.venue} · 📅 {new Date(match.matchDate).toLocaleString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</p>
           </div>
           {user?.role === 'admin' && (
             <button className="btn btn-outline btn-sm" onClick={getAiSquad} disabled={aiLoading}>
@@ -312,8 +312,8 @@ export default function MatchDetail() {
             <p style={{ fontWeight: 600 }}>{match.venue}</p>
           </div>
           <div className="card card-sm">
-            <p className="label">Date</p>
-            <p style={{ fontWeight: 600 }}>{new Date(match.matchDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <p className="label">Kickoff</p>
+            <p style={{ fontWeight: 600 }}>{new Date(match.matchDate).toLocaleString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</p>
           </div>
         </div>
       )}

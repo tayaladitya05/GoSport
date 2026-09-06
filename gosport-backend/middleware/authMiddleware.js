@@ -1,25 +1,30 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { getAccessToken } = require("../utils/authCookie");
+
+const JWT_SECRET = () => process.env.JWT_SECRET || "dev-secret-change-in-production";
 
 const protect = async (req, res, next) => {
-  let token;
-
-  if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
-    try {
-      token = req.headers.authorization.split(" ")[1];
-
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || "dev-secret-change-in-production");
-
-      req.user = await User.findById(decoded.id).select("-password");
-
-      next();
-    } catch (error) {
-      res.status(401).json({ message: "Not authorized, token failed" });
+  try {
+    const token = getAccessToken(req);
+    if (!token) {
+      return res.status(401).json({ message: "Not authorized, no token" });
     }
-  }
 
-  if (!token) {
-    res.status(401).json({ message: "Not authorized, no token" });
+    const decoded = jwt.verify(token, JWT_SECRET());
+    const user = await User.findById(decoded.id).select("-password");
+    if (!user) {
+      return res.status(401).json({ message: "Not authorized, token failed" });
+    }
+
+    if ((user.tokenVersion || 0) !== (decoded.tokenVersion || 0)) {
+      return res.status(401).json({ message: "Not authorized, token invalidated" });
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    return res.status(401).json({ message: "Not authorized, token failed" });
   }
 };
 

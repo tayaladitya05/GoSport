@@ -19,7 +19,7 @@ function createTransporter() {
   });
 }
 
-function buildVerificationEmail({ name, verifyUrl }) {
+async function sendEmail({ to, name, subject, intro, instructions, buttonText, link, outro }) {
   const mailGenerator = new Mailgen({
     theme: "default",
     product: {
@@ -30,37 +30,30 @@ function buildVerificationEmail({ name, verifyUrl }) {
 
   const email = {
     body: {
-      name: name || "Spectator",
-      intro: "Welcome to GoSport. Confirm your email to finish creating your spectator account.",
+      name: name || "there",
+      intro,
       action: {
-        instructions: "Click the button below to verify your email:",
+        instructions,
         button: {
           color: "#7C6AF7",
-          text: "Verify email",
-          link: verifyUrl,
+          text: buttonText,
+          link,
         },
       },
-      outro: "This link expires in 24 hours. If you did not sign up, you can ignore this email.",
+      outro,
     },
   };
 
-  return {
-    html: mailGenerator.generate(email),
-    text: mailGenerator.generatePlaintext(email),
-  };
-}
+  const html = mailGenerator.generate(email);
+  const text = mailGenerator.generatePlaintext(email);
 
-async function sendVerificationEmail({ to, name, verifyUrl }) {
-  const transporter = createTransporter();
-  const { html, text } = buildVerificationEmail({ name, verifyUrl });
-
-  await transporter.sendMail({
+  await createTransporter().sendMail({
     from: process.env.MAIL_FROM || process.env.SMTP_USER,
     to,
-    subject: "Verify your GoSport spectator account",
+    subject,
     text,
     html,
   });
 }
 
-module.exports = { sendVerificationEmail };
+module.exports = { sendEmail };

@@ -4,6 +4,7 @@ const express = require("express");
 const { Server: SocketIO } = require("socket.io");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
 
 const authRoutes = require("./routes/authRoutes");
 const matchRoutes = require("./routes/matchRoutes");
@@ -13,9 +14,14 @@ const publicRoutes = require("./routes/publicRoutes");
 
 const app = express();
 
-// Middleware
-app.use(cors());
+const frontendOrigin = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+
+app.use(cors({
+  origin: frontendOrigin,
+  credentials: true,
+}));
 app.use(express.json());
+app.use(cookieParser());
 
 // Serve test page for Socket.io: open http://localhost:5000/test-socket.html in browser
 const path = require("path");
@@ -42,7 +48,7 @@ const server = http.createServer(app);
 
 // Socket.io for real-time updates (spectators see score changes live)
 const io = new SocketIO(server, {
-  cors: { origin: "*" },
+  cors: { origin: frontendOrigin, credentials: true },
 });
 app.set("io", io);
 

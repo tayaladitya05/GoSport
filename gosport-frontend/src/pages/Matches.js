@@ -10,7 +10,9 @@ export default function Matches() {
   const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    api.get('/matches').then(r => { setMatches(r.data); setLoading(false); }).catch(() => setLoading(false));
+    api.get('/matches')
+      .then(r => { setMatches(r.data); setLoading(false); })
+      .catch(() => setLoading(false));
   }, []);
 
   const filtered = filter === 'all' ? matches : matches.filter(m => m.status === filter);
@@ -33,7 +35,7 @@ export default function Matches() {
           <button
             key={f} onClick={() => setFilter(f)}
             style={{
-              padding: '7px 18px', borderRadius: 20, border: 'none', cursor: 'pointer',
+              padding: '7px 18px', borderRadius: 20, cursor: 'pointer',
               fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600,
               background: filter === f ? 'var(--orange)' : 'var(--card2)',
               color: filter === f ? '#fff' : 'var(--text-muted)',
@@ -64,7 +66,7 @@ export default function Matches() {
                       {m.teams?.join(' vs ')}
                     </p>
                     <p style={{ color: 'var(--text-dim)', fontSize: 12 }}>
-                      📍 {m.venue} · 📅 {new Date(m.matchDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      📍 {m.venue} · 📅 {new Date(m.matchDate).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
                     </p>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>

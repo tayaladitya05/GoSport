@@ -188,13 +188,18 @@ export default function Login() {
                     value={email} onChange={e => setEmail(e.target.value)} required autoFocus />
                 </div>
               </div>
-              <div style={{ marginBottom:20 }}>
+              <div style={{ marginBottom:8 }}>
                 <label className="label" style={{ marginBottom:8 }}>Password</label>
                 <div className="input-wrap">
                   <span className="input-icon">🔒</span>
                   <input className="auth-input-fancy" type="password" placeholder="••••••••"
                     value={password} onChange={e => setPassword(e.target.value)} required />
                 </div>
+              </div>
+              <div style={{ textAlign:'right', marginBottom:20 }}>
+                <Link to="/forgot-password" style={{ color:'var(--accent)', fontSize:12, fontWeight:600 }}>
+                  Forgot password?
+                </Link>
               </div>
 
               {error && (

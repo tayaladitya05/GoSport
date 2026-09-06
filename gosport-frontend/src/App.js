@@ -10,6 +10,8 @@ import Login        from './pages/Login';
 import Register     from './pages/Register';
 import SpectatorReg from './pages/SpectatorRegister';
 import VerifyEmail  from './pages/VerifyEmail';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard    from './pages/Dashboard';
 import Matches      from './pages/Matches';
 import MatchDetail  from './pages/MatchDetail';
@@ -39,6 +41,8 @@ export default function App() {
               <Route path="/login"             element={<Login />} />
               <Route path="/register/spectator" element={<SpectatorReg />} />
               <Route path="/verify-email"      element={<VerifyEmail />} />
+              <Route path="/forgot-password"   element={<ForgotPassword />} />
+              <Route path="/reset-password"    element={<ResetPassword />} />
 
               {/* Change 1: /matches and /matches/:id require login */}
               <Route path="/matches" element={

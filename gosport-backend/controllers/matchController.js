@@ -10,6 +10,19 @@ const {
   scoreFootballPlayer,
 } = require("../utils/aiSquad");
 
+const MATCH_DURATION_MS = 5 * 60 * 60 * 1000;
+
+function computeMatchStatus(match) {
+  if (!match || !match.matchDate) return match?.status || "upcoming";
+  const start = new Date(match.matchDate).getTime();
+  const end = start + MATCH_DURATION_MS;
+  const now = Date.now();
+
+  if (now < start) return "upcoming";
+  if (now < end) return "live";
+  return "completed";
+}
+
 // @desc    Create a new match
 // @route   POST /api/matches
 // @access  Admin
@@ -18,10 +31,13 @@ exports.createMatch = async (req, res) => {
     const match = await Match.create({
       ...req.body,
       createdBy: req.user._id,
+      status: "upcoming",
     });
 
     if (!match.teams || match.teams.length === 0) {
-      return res.status(201).json(match);
+      const matchDoc = match.toObject();
+      matchDoc.status = computeMatchStatus(match);
+      return res.status(201).json(matchDoc);
     }
 
     if (match.sportType === "cricket") {
@@ -44,7 +60,9 @@ exports.createMatch = async (req, res) => {
       );
     }
 
-    res.status(201).json(match);
+    const matchDoc = match.toObject();
+    matchDoc.status = computeMatchStatus(match);
+    res.status(201).json(matchDoc);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -238,8 +256,12 @@ exports.getFootballAiSquad = async (req, res) => {
 // @access  Public / Protected
 exports.getAllMatches = async (req, res) => {
   try {
-    const matches = await Match.find().sort({ createdAt: -1 });
-    res.json(matches);
+    const matches = await Match.find().sort({ matchDate: 1 }).lean();
+    const formatted = matches.map((m) => ({
+      ...m,
+      status: computeMatchStatus(m),
+    }));
+    res.json(formatted);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -367,6 +389,8 @@ exports.getMatchScorecard = async (req, res) => {
     if (!match) {
       return res.status(404).json({ message: "Match not found" });
     }
+    const matchDoc = match.toObject();
+    matchDoc.status = computeMatchStatus(match);
 
     const matchPlayers = await MatchPlayer.find({ match: match._id, isStarting: true }).populate({
       path: "player",
@@ -432,7 +456,7 @@ exports.getMatchScorecard = async (req, res) => {
     const teamScores = await MatchScore.find({ match: match._id });
 
     res.json({
-      match,
+      match: matchDoc,
       stats,
       teamScores,
       playerScorecards,

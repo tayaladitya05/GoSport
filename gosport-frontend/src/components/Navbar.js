@@ -9,7 +9,10 @@ export default function Navbar() {
   const location = useLocation();
   const { theme, toggle } = useTheme();
 
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
   const isActive = (path) => location.pathname.startsWith(path);
 
   // Change 1: no nav links shown to unauthenticated users
