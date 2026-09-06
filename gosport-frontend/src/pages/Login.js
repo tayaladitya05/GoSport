@@ -3,14 +3,17 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
-  const { login }  = useAuth();
+  const { login, resendVerification }  = useAuth();
   const location   = useLocation();
   const registered = location.state?.registered;
+  const checkEmail = location.state?.checkEmail;
   const navigate   = useNavigate();
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
+  const [needsVerify, setNeedsVerify] = useState(false);
+  const [resendNote, setResendNote] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,7 +22,9 @@ export default function Login() {
       await login(email, password);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Invalid email or password');
+      const data = err.response?.data;
+      setNeedsVerify(!!data?.requiresVerification);
+      setError(data?.message || 'Invalid email or password');
     } finally { setLoading(false); }
   };
 
@@ -155,7 +160,12 @@ export default function Login() {
           </div>
 
           {/* Success banner */}
-          {registered && (
+          {checkEmail && (
+            <div style={{ background:'rgba(124,106,247,0.12)', border:'1px solid var(--accent)', borderRadius:10, padding:'12px 16px', marginBottom:20, color:'var(--text)', fontSize:13, fontWeight:600, display:'flex', alignItems:'center', gap:8 }}>
+              ✉️ Check your inbox and verify your email before signing in.
+            </div>
+          )}
+          {registered && !checkEmail && (
             <div style={{ background:'rgba(76,218,127,0.1)', border:'1px solid #4cda7f', borderRadius:10, padding:'12px 16px', marginBottom:20, color:'#4cda7f', fontSize:13, fontWeight:600, display:'flex', alignItems:'center', gap:8 }}>
               ✓ Account created successfully! Sign in to continue.
             </div>
@@ -191,6 +201,27 @@ export default function Login() {
                 <div style={{ background:'rgba(224,85,85,0.1)', border:'1px solid var(--error)', borderRadius:8, padding:'10px 14px', marginBottom:16, color:'var(--error)', fontSize:13 }}>
                   ⚠️ {error}
                 </div>
+              )}
+              {needsVerify && (
+                <button
+                  type="button"
+                  className="spec-btn"
+                  style={{ marginBottom:16 }}
+                  onClick={async () => {
+                    setResendNote('');
+                    try {
+                      const data = await resendVerification(email);
+                      setResendNote(data.message);
+                    } catch (err) {
+                      setResendNote(err.response?.data?.message || 'Could not resend email');
+                    }
+                  }}
+                >
+                  Resend verification email
+                </button>
+              )}
+              {resendNote && (
+                <p style={{ color:'#4cda7f', fontSize:12, marginBottom:16 }}>{resendNote}</p>
               )}
 
               <button type="submit" className="signin-btn" disabled={loading}>

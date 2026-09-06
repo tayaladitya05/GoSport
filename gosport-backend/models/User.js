@@ -18,6 +18,19 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ["admin", "player", "spectator"],
     required: true
+  },
+  // Spectators must verify email. Admin/player accounts created in-app skip this.
+  isVerified: {
+    type: Boolean,
+    default: true
+  },
+  verificationToken: {
+    type: String,
+    default: null
+  },
+  verificationExpires: {
+    type: Date,
+    default: null
   }
 }, { timestamps: true });
 

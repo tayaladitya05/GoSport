@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function SpectatorRegister() {
-  const { register } = useAuth();
-  const navigate     = useNavigate();
+  const { register, resendVerification } = useAuth();
   const [form, setForm] = useState({ name:'', email:'', password:'', confirm:'' });
   const [error,   setError]   = useState('');
   const [loading, setLoading] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [resendNote, setResendNote] = useState('');
+  const [resending, setResending] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -19,10 +21,21 @@ export default function SpectatorRegister() {
     setLoading(true);
     try {
       await register({ name:form.name, email:form.email, password:form.password, role:'spectator' });
-      navigate('/login', { state:{ registered:true } });
+      setPendingEmail(form.email);
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.message || 'Registration failed');
     } finally { setLoading(false); }
+  };
+
+  const handleResend = async () => {
+    setResendNote('');
+    setResending(true);
+    try {
+      const data = await resendVerification(pendingEmail);
+      setResendNote(data.message);
+    } catch (err) {
+      setResendNote(err.response?.data?.message || 'Could not resend email');
+    } finally { setResending(false); }
   };
 
   const perks = [
@@ -112,7 +125,26 @@ export default function SpectatorRegister() {
             </span>
           </div>
 
-          {/* Main card */}
+          {pendingEmail ? (
+          <div style={{ background:'var(--card)', border:'1px solid var(--border2)', borderRadius:16, padding:28, boxShadow:'0 24px 64px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.04)' }}>
+            <div style={{ height:3, borderRadius:'2px 2px 0 0', background:'linear-gradient(90deg, var(--accent2), var(--accent))', margin:'-28px -28px 24px' }} />
+            <p style={{ fontSize:28, textAlign:'center', marginBottom:8 }}>✉️</p>
+            <h2 style={{ fontFamily:'var(--font-head)', fontSize:'1.4rem', textAlign:'center', marginBottom:8 }}>Check your email</h2>
+            <p style={{ color:'var(--text-muted)', fontSize:13, lineHeight:1.6, textAlign:'center', marginBottom:20 }}>
+              We sent a verification link to <strong style={{ color:'var(--text)' }}>{pendingEmail}</strong>.
+              Open it to activate your spectator account, then sign in.
+            </p>
+            {resendNote && (
+              <p style={{ color:'#4cda7f', fontSize:12, textAlign:'center', marginBottom:14 }}>{resendNote}</p>
+            )}
+            <button type="button" className="sreg-submit" disabled={resending} onClick={handleResend}>
+              {resending ? 'Sending…' : 'Resend verification email'}
+            </button>
+            <p style={{ textAlign:'center', marginTop:16 }}>
+              <Link to="/login" style={{ color:'var(--accent)', fontWeight:700, fontSize:13 }}>Go to sign in</Link>
+            </p>
+          </div>
+          ) : (
           <div style={{ background:'var(--card)', border:'1px solid var(--border2)', borderRadius:16, padding:28, boxShadow:'0 24px 64px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.04)' }}>
             <div style={{ height:3, borderRadius:'2px 2px 0 0', background:'linear-gradient(90deg, var(--accent2), var(--accent))', margin:'-28px -28px 24px' }} />
 
@@ -155,6 +187,7 @@ export default function SpectatorRegister() {
               </button>
             </form>
           </div>
+          )}
 
           <p style={{ textAlign:'center', marginTop:18, color:'var(--text-muted)', fontSize:13 }}>
             Already have an account?{' '}

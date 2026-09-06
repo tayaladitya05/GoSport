@@ -1,79 +1,20 @@
 const express = require("express");
 const router = express.Router();
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const User = require("../models/User.js");
-const Player = require("../models/Player");
+const {
+  register,
+  login,
+  verifyEmail,
+  resendVerification,
+} = require("../controllers/authController");
+const {
+  registerValidator,
+  loginValidator,
+  resendVerificationValidator,
+} = require("../validators/authValidator");
 
-// REGISTER
-router.post("/register", async (req, res) => {
-  try {
-    const { 
-      name, 
-      email, 
-      password, 
-      role,
-      sportType,
-      teamName,
-      playerRole,
-      jerseyNumber
-    } = req.body;
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = new User({
-      name,
-      email,
-      password: hashedPassword,
-      role
-    });
-
-    await user.save();
-
-    // 🔥 If role is player, create Player profile
-    if (role === "player") {
-      await Player.create({
-        user: user._id,
-        sportType,
-        teamName,
-        role: playerRole,
-        jerseyNumber,
-        createdBy: user._id   // temporary, can adjust later
-      });
-    }
-
-    res.json({ message: "User registered successfully" });
-
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// LOGIN
-router.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: "User not found" });
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid password" });
-
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET || "dev-secret-change-in-production",
-      { expiresIn: "1d" }
-    );
-
-    res.json({
-      token,
-      role: user.role
-    });
-
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
+router.post("/register", registerValidator, register);
+router.post("/login", loginValidator, login);
+router.post("/verify-email", verifyEmail);
+router.post("/resend-verification", resendVerificationValidator, resendVerification);
 
 module.exports = router;
