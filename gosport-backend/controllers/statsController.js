@@ -31,11 +31,12 @@ exports.addFootballStat = async (req, res) => {
 // @access  Admin
 exports.updateCricketScore = async (req, res) => {
   try {
-    const { matchId, playerId, teamName, runs, isWicket, wicketBowlerId } = req.body;
+    const { matchId, playerId, bowlerId, teamName, runs, isWicket, wicketBowlerId } = req.body;
     const runsNum = Number(runs) || 0;
     const isWicketBool = Boolean(isWicket);
+    const activeBowler = bowlerId || wicketBowlerId;
 
-    // Update player stats
+    // Update batsman stats
     let playerStat = await CricketStat.findOne({
       match: matchId,
       player: playerId
@@ -55,16 +56,26 @@ exports.updateCricketScore = async (req, res) => {
 
     await playerStat.save();
 
-    // Increment bowler's wicket stat if a bowler is provided
-    if (isWicketBool && wicketBowlerId) {
-      let bowlerStat = await CricketStat.findOne({
+    // Update bowler stats
+    let bowlerStat = null;
+    if (activeBowler) {
+      bowlerStat = await CricketStat.findOne({
         match: matchId,
-        player: wicketBowlerId
+        player: activeBowler
       });
       if (!bowlerStat) {
-        bowlerStat = new CricketStat({ match: matchId, player: wicketBowlerId });
+        bowlerStat = new CricketStat({ match: matchId, player: activeBowler });
       }
-      bowlerStat.wickets += 1;
+
+      bowlerStat.ballsBowled = (bowlerStat.ballsBowled || 0) + 1;
+      bowlerStat.runsConceded = (bowlerStat.runsConceded || 0) + runsNum;
+      if (isWicketBool) {
+        bowlerStat.wickets += 1;
+      }
+      // Calculate bowler overs (e.g. 6 balls = 1.0, 7 balls = 1.1)
+      const bBalls = bowlerStat.ballsBowled;
+      bowlerStat.overs = Math.floor(bBalls / 6) + (bBalls % 6) / 10;
+
       await bowlerStat.save();
     }
 
@@ -93,6 +104,7 @@ exports.updateCricketScore = async (req, res) => {
     let totalBalls = Math.floor(teamScore.overs) * 6 + Math.round((teamScore.overs * 10) % 10);
     totalBalls += 1;
     teamScore.overs = Math.floor(totalBalls / 6) + (totalBalls % 6) / 10;
+    const isOverComplete = totalBalls % 6 === 0;
 
     await teamScore.save();
 
@@ -100,13 +112,15 @@ exports.updateCricketScore = async (req, res) => {
     const io = req.app.get("io");
     if (io) {
       const teamScores = await MatchScore.find({ match: matchId }).lean();
-      io.emit("scoreUpdate", { matchId, sportType: "cricket", teamScores });
+      io.emit("scoreUpdate", { matchId, sportType: "cricket", teamScores, isOverComplete, lastBowlerId: activeBowler });
     }
 
     res.json({
       message: "Score updated",
       playerStat,
-      teamScore
+      bowlerStat,
+      teamScore,
+      isOverComplete
     });
 
   } catch (error) {

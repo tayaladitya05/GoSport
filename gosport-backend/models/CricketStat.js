@@ -44,6 +44,16 @@ const cricketStatSchema = new mongoose.Schema(
     default: 0
   },
 
+  ballsBowled: {
+    type: Number,
+    default: 0
+  },
+
+  runsConceded: {
+    type: Number,
+    default: 0
+  },
+
   isOut: {
     type: Boolean,
     default: false

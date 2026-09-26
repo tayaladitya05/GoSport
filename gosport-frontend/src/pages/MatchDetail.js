@@ -19,6 +19,8 @@ export default function MatchDetail() {
   const [tab, setTab] = useState('overview');
   
   const [selectedPlayerForStats, setSelectedPlayerForStats] = useState("");
+  const [activeBowlerId, setActiveBowlerId] = useState("");
+  const [overNotification, setOverNotification] = useState("");
   const [statsLoading, setStatsLoading] = useState(false);
   const [runsInput, setRunsInput] = useState(0);
   const [isWicketInput, setIsWicketInput] = useState(false);
@@ -128,19 +130,33 @@ export default function MatchDetail() {
   };
 
   const handleUpdateScore = async () => {
-    if (!selectedPlayerForStats) return alert("Select a player first");
+    if (!selectedPlayerForStats) return alert("Please select a batsman first");
+    if (match.sportType === 'cricket' && !activeBowlerId) {
+      return alert("Please select the current bowler first");
+    }
     const p = players.find(x => x.player._id === selectedPlayerForStats);
     setStatsLoading(true);
     try {
        if (match.sportType === 'cricket') {
-          await api.put(`/stats/cricket/update`, {
+          const res = await api.put(`/stats/cricket/update`, {
             matchId: match._id,
             playerId: selectedPlayerForStats,
+            bowlerId: activeBowlerId,
             teamName: p.teamName,
             runs: Number(runsInput),
             isWicket: isWicketInput,
-            wicketBowlerId: isWicketInput ? wicketBowlerId : null
           });
+
+          if (res.data.isOverComplete) {
+            setOverNotification("🔔 Over completed! Bowler finished 6 balls (over++ in their stats). Please select the bowler for the next over.");
+            setActiveBowlerId(""); // Reset active bowler to prompt admin for next over
+          } else {
+            setOverNotification("");
+          }
+
+          if (isWicketInput) {
+            setSelectedPlayerForStats(""); // Batsman out, clear selection for next batsman
+          }
        } else {
           await api.put(`/stats/football/update`, {
             matchId: match._id,
@@ -151,7 +167,6 @@ export default function MatchDetail() {
        }
        setRunsInput(0);
        setIsWicketInput(false);
-       setWicketBowlerId("");
        setFootballStats({ goals: 0, assists: 0, yellowCards: 0, redCards: 0, minutesPlayed: 0 });
        loadData();
     } catch(e) {
@@ -243,41 +258,111 @@ export default function MatchDetail() {
 
       {user?.role === 'admin' && match.status === 'live' && (
          <div className="card" style={{ marginBottom: 20, borderColor: 'var(--orange)', background: 'var(--card)' }}>
-            <h3 style={{ marginBottom: 8, fontSize: '1.1rem', color: 'var(--orange)' }}>Quick Stats Update</h3>
-            <p style={{ color: 'var(--text-muted)', marginBottom: 12, fontSize: 13 }}>Select a player and update their live scores.</p>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-               <select className="input" value={selectedPlayerForStats} onChange={(e) => setSelectedPlayerForStats(e.target.value)} style={{ padding: '8.5px 12px', minWidth: 200, fontSize: 14 }}>
-                  <option value="">-- Select Player --</option>
-                  {players.filter(p => p.teamName !== 'Unassigned' && !getOutPlayersIds().includes(p.player._id)).map(p => (
-                     <option key={p.player._id} value={p.player._id}>{p.player.user?.name || "Unknown"} ({p.teamName})</option>
-                  ))}
-               </select>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+               <h3 style={{ fontSize: '1.1rem', color: 'var(--orange)' }}>Quick Stats Update</h3>
+               {match.sportType === 'cricket' && (
+                  <span className={`badge ${activeBowlerId ? 'badge-cricket' : 'badge-neutral'}`} style={{ fontSize: 11 }}>
+                     {activeBowlerId ? `Current Bowler Selected` : `⚠️ Select Bowler for Over`}
+                  </span>
+               )}
+            </div>
+            <p style={{ color: 'var(--text-muted)', marginBottom: 14, fontSize: 13 }}>
+               {match.sportType === 'cricket' ? "Select Batsman and Bowler. Every ball updates their stats, and after every 6 balls (over++), you will be prompted to pick the next bowler." : "Select a player and update their live match statistics."}
+            </p>
+
+            {overNotification && (
+               <div style={{ padding: '12px 16px', background: 'rgba(255, 107, 44, 0.15)', border: '1.5px solid var(--orange)', borderRadius: 10, color: 'var(--orange)', fontSize: 13, fontWeight: 700, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <span>{overNotification}</span>
+                  <button className="btn btn-sm btn-outline" style={{ borderColor: 'var(--orange)', color: 'var(--orange)', padding: '2px 8px', fontSize: 11 }} onClick={() => setOverNotification("")}>Dismiss</button>
+               </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+               {/* Batsman selector */}
+               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>BATSMAN (FACING)</span>
+                  <select className="input" value={selectedPlayerForStats} onChange={(e) => setSelectedPlayerForStats(e.target.value)} style={{ padding: '8.5px 12px', minWidth: 190, fontSize: 14 }}>
+                     <option value="">-- Select Batsman --</option>
+                     {players.filter(p => p.teamName !== 'Unassigned' && !getOutPlayersIds().includes(p.player._id)).map(p => (
+                        <option key={p.player._id} value={p.player._id}>{p.player.user?.name || "Unknown"} ({p.teamName})</option>
+                     ))}
+                  </select>
+               </div>
                
                {match.sportType === 'cricket' ? (
                   <>
-                     <input type="number" className="input" placeholder="Runs" value={runsInput} onChange={e=>setRunsInput(e.target.value)} style={{ width: 80 }} />
-                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
-                        <input type="checkbox" checked={isWicketInput} onChange={e=>setIsWicketInput(e.target.checked)} />
-                        Wicket
-                     </label>
-                     {isWicketInput && (
-                        <select className="input" value={wicketBowlerId} onChange={e => setWicketBowlerId(e.target.value)} style={{ padding: '8.5px 12px', width: 140, fontSize: 14 }}>
-                           <option value="">-- Bowler --</option>
-                           {players.filter(p => p.teamName !== 'Unassigned' && selectedPlayerForStats && p.teamName !== players.find(x => x.player._id === selectedPlayerForStats)?.teamName).map(p => (
-                              <option key={p.player._id} value={p.player._id}>{p.player.user?.name || "Unknown"}</option>
+                     {/* Bowler selector */}
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: !activeBowlerId ? 'var(--orange)' : 'var(--text-muted)' }}>
+                           {activeBowlerId ? "CURRENT BOWLER" : "👉 SELECT BOWLER (REQUIRED)"}
+                        </span>
+                        <select 
+                           className="input" 
+                           value={activeBowlerId} 
+                           onChange={e => { setActiveBowlerId(e.target.value); setOverNotification(""); }} 
+                           style={{ 
+                              padding: '8.5px 12px', 
+                              minWidth: 190, 
+                              fontSize: 14,
+                              borderColor: !activeBowlerId ? 'var(--orange)' : undefined,
+                              background: !activeBowlerId ? 'rgba(255, 107, 44, 0.06)' : undefined
+                           }}
+                        >
+                           <option value="">-- Select Bowler --</option>
+                           {players.filter(p => {
+                              if (p.teamName === 'Unassigned') return false;
+                              if (selectedPlayerForStats) {
+                                 const batsmanTeam = players.find(x => x.player._id === selectedPlayerForStats)?.teamName;
+                                 return p.teamName !== batsmanTeam;
+                              }
+                              return true;
+                           }).map(p => (
+                              <option key={p.player._id} value={p.player._id}>{p.player.user?.name || "Unknown"} ({p.teamName})</option>
                            ))}
                         </select>
-                     )}
-                     <button className="btn btn-primary" disabled={statsLoading} onClick={handleUpdateScore}>Update Ball</button>
+                     </div>
+
+                     {/* Runs input and quick buttons */}
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>RUNS</span>
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                           <input type="number" min="0" max="6" className="input" placeholder="Runs" value={runsInput} onChange={e=>setRunsInput(e.target.value)} style={{ width: 65 }} />
+                           {[0, 1, 2, 3, 4, 6].map(r => (
+                              <button 
+                                 type="button" 
+                                 key={r} 
+                                 className={`btn btn-sm ${Number(runsInput) === r ? 'btn-primary' : 'btn-outline'}`}
+                                 style={{ padding: '4px 7px', fontSize: 12, minWidth: 26 }}
+                                 onClick={() => setRunsInput(r)}
+                              >
+                                 {r}
+                              </button>
+                           ))}
+                        </div>
+                     </div>
+
+                     {/* Wicket */}
+                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, marginTop: 18, cursor: 'pointer', fontWeight: 600, color: isWicketInput ? 'var(--red)' : 'var(--text)' }}>
+                        <input type="checkbox" checked={isWicketInput} onChange={e=>setIsWicketInput(e.target.checked)} />
+                        🔴 Wicket
+                     </label>
+
+                     <div style={{ marginTop: 18 }}>
+                        <button className="btn btn-primary" disabled={statsLoading} onClick={handleUpdateScore}>
+                           {statsLoading ? 'Updating...' : '⚡ Record Ball'}
+                        </button>
+                     </div>
                   </>
                ) : (
                   <>
-                     <input type="number" className="input" placeholder="G" value={footballStats.goals} onChange={e=>setFootballStats({...footballStats, goals: e.target.value})} style={{ width: 60 }} title="Goals" />
-                     <input type="number" className="input" placeholder="A" value={footballStats.assists} onChange={e=>setFootballStats({...footballStats, assists: e.target.value})} style={{ width: 60 }} title="Assists" />
-                     <input type="number" className="input" placeholder="Y" value={footballStats.yellowCards} onChange={e=>setFootballStats({...footballStats, yellowCards: e.target.value})} style={{ width: 60 }} title="Yellow Cards" />
-                     <input type="number" className="input" placeholder="R" value={footballStats.redCards} onChange={e=>setFootballStats({...footballStats, redCards: e.target.value})} style={{ width: 60 }} title="Red Cards" />
-                     <input type="number" className="input" placeholder="Min" value={footballStats.minutesPlayed} onChange={e=>setFootballStats({...footballStats, minutesPlayed: e.target.value})} style={{ width: 70 }} title="Minutes Played" />
-                     <button className="btn btn-primary" disabled={statsLoading} onClick={handleUpdateScore}>Update Stats</button>
+                     <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                        <div><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Goals</span><input type="number" className="input" placeholder="G" value={footballStats.goals} onChange={e=>setFootballStats({...footballStats, goals: e.target.value})} style={{ width: 55, display: 'block' }} /></div>
+                        <div><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Assists</span><input type="number" className="input" placeholder="A" value={footballStats.assists} onChange={e=>setFootballStats({...footballStats, assists: e.target.value})} style={{ width: 55, display: 'block' }} /></div>
+                        <div><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Yellow</span><input type="number" className="input" placeholder="Y" value={footballStats.yellowCards} onChange={e=>setFootballStats({...footballStats, yellowCards: e.target.value})} style={{ width: 55, display: 'block' }} /></div>
+                        <div><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Red</span><input type="number" className="input" placeholder="R" value={footballStats.redCards} onChange={e=>setFootballStats({...footballStats, redCards: e.target.value})} style={{ width: 55, display: 'block' }} /></div>
+                        <div><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Min</span><input type="number" className="input" placeholder="Min" value={footballStats.minutesPlayed} onChange={e=>setFootballStats({...footballStats, minutesPlayed: e.target.value})} style={{ width: 65, display: 'block' }} /></div>
+                        <button className="btn btn-primary" disabled={statsLoading} onClick={handleUpdateScore}>Update Stats</button>
+                     </div>
                   </>
                )}
             </div>
