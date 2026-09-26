@@ -1,130 +1,142 @@
 # GoSport
 
-GoSport is a full-stack sports management project for **cricket** and **football**.
-It supports three user roles:
+GoSport is a full-stack web application designed for organizing, managing, and tracking sports matches (Cricket & Football) with live real-time score updates and role-based access.
 
-- **Admin**: create matches, update scores, manage squads, apply AI squad selection
-- **Player**: login and mark match availability
-- **Spectator**: view live score updates and player skill summaries
+---
+
+## Features
+
+- **Multi-Sport Management**: Full support for both Cricket (runs, wickets, overs, player scorecards) and Football (goals, assists, cards, match stats).
+- **Role-Based Access Control**:
+  - **Admin**: Create and schedule matches, manage squads, update live scores, and generate algorithmic squad recommendations.
+  - **Player**: View fixtures, track personal performance and career stats, and submit match availability.
+  - **Spectator**: View live scoreboards, match summaries, and public player profiles without authentication.
+- **Real-Time Live Scores**: Live score broadcasting powered by Socket.io so spectators see instant updates without refreshing.
+- **Squad Recommendation**: Automated squad ranking based on player performance metrics and career history.
+
+---
 
 ## Tech Stack
 
-### Backend (`gosport-backend`)
-- Node.js + Express
-- MongoDB + Mongoose
-- JWT authentication
-- Socket.io (real-time score updates)
+### Backend
+- **Runtime**: Node.js & Express
+- **Database**: MongoDB with Mongoose
+- **Authentication**: JSON Web Tokens (JWT) & bcryptjs
+- **Real-Time Engine**: Socket.io
 
-### Frontend (`gosport-frontend`)
-- React
-- React Router
-- Axios
-- Socket.io client
+### Frontend
+- **Framework**: React 18 (React Router v6)
+- **HTTP Client**: Axios
+- **Real-Time Client**: Socket.io Client
 
-## Project Structure
+---
+
+## Repository Structure
 
 ```text
 GoSport/
-  gosport-backend/
-  gosport-frontend/
+├── gosport-backend/
+│   ├── controllers/      # Route logic & controllers
+│   ├── middleware/       # Auth and validation middleware
+│   ├── models/           # Mongoose schemas (User, Match, Stats, etc.)
+│   ├── routes/           # Express API route declarations
+│   ├── utils/            # Helper utilities and squad ranking logic
+│   ├── server.js         # Backend entry point
+│   └── package.json
+└── gosport-frontend/
+    ├── public/
+    ├── src/
+    │   ├── components/   # Reusable UI components (Navbar, ProtectedRoute, Toast)
+    │   ├── context/      # AuthContext for global session state
+    │   ├── pages/        # Views (Dashboard, Matches, MatchDetail, Stats, etc.)
+    │   └── utils/        # Axios API client configuration
+    └── package.json
 ```
 
-## Key Features
+---
 
-- Cricket and football match creation
-- Team score tracking (`MatchScore`)
-  - Cricket: runs, wickets, overs
-  - Football: goals
-- Player-wise match scorecards
-- Live updates via Socket.io (`scoreUpdate` event)
-- Public player skill API
-- AI squad ranking for admins
+## Getting Started
 
-## Backend Setup
+### Prerequisites
+- Node.js (v16 or higher)
+- MongoDB running locally or a MongoDB Atlas URI
 
-1. Go to backend folder:
+---
+
+### 1. Backend Setup
+
+1. Navigate to the backend directory:
    ```bash
    cd gosport-backend
    ```
+
 2. Install dependencies:
    ```bash
    npm install
    ```
-3. Create env file:
+
+3. Configure environment variables:
+   Create a `.env` file in `gosport-backend/` (or copy `.env.example`):
    ```bash
-   copy .env.example .env
+   cp .env.example .env
    ```
-   (Use `cp .env.example .env` on macOS/Linux)
-4. Start server:
+   Configure the following variables in `.env`:
+   ```env
+   PORT=5000
+   MONGODB_URI=mongodb://127.0.0.1:27017/gosport
+   JWT_SECRET=your_jwt_secret_key
+   FRONTEND_URL=http://localhost:3000
+   ```
+
+4. Start the backend server:
    ```bash
    npm start
    ```
+   The backend will be running on `http://localhost:5000`.
 
-Backend runs on `http://localhost:5000`.
+---
 
-## Frontend Setup
+### 2. Frontend Setup
 
-1. Open a new terminal:
+1. Open a new terminal and navigate to the frontend directory:
    ```bash
    cd gosport-frontend
-   npm install
-   npm start
    ```
 
-Frontend runs on `http://localhost:3000`.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-## Environment Variables (`gosport-backend/.env`)
+3. Configure environment variables:
+   Create a `.env` file in `gosport-frontend/`:
+   ```env
+   REACT_APP_API_URL=http://localhost:5000/api
+   ```
 
-```env
-JWT_SECRET=your-super-secret-key-change-this-in-production
-MONGODB_URI=mongodb://127.0.0.1:27017/gosport
-PORT=5000
-```
+4. Start the development server:
+   ```bash
+   npm start
+   ```
+   The frontend will open on `http://localhost:3000`.
 
-## Main API Routes
+---
 
-### Auth
-- `POST /api/auth/register`
-- `POST /api/auth/login`
+## API Overview
 
-### Public
-- `GET /api/public/players/:playerId/skills`
+### Authentication (`/api/auth`)
+- `POST /api/auth/register` - Register a new user (Player / Admin / Spectator)
+- `POST /api/auth/login` - Authenticate and return JWT
 
-### Matches
-- `POST /api/matches` (admin)
-- `GET /api/matches`
-- `GET /api/matches/:matchId/players`
-- `GET /api/matches/:matchId/scorecard`
-- `POST /api/matches/:matchId/add-player` (admin)
-- `PUT /api/matches/:matchId/status` (admin)
-- `POST /api/matches/:matchId/availability` (player)
-- `PUT /api/matches/matchplayer/:matchPlayerId` (admin)
+### Matches (`/api/matches`)
+- `GET /api/matches` - Get list of matches (filterable by sport/status)
+- `POST /api/matches` - Create a new match (Admin)
+- `GET /api/matches/:id/scorecard` - Fetch scorecard details for a match
+- `POST /api/matches/:id/availability` - Submit player availability (Player)
+- `POST /api/matches/:id/ai-squad/:sport` - Get algorithmic squad recommendations (Admin)
 
-### AI Squad
-- `POST /api/matches/:matchId/ai-squad/cricket` (admin)
-  - Body example: `{ "maxSlots": 11, "teamName": "CSE" }`
-- `POST /api/matches/:matchId/ai-squad/football` (admin)
-  - Body example: `{ "maxSlots": 11, "teamName": "CSE" }`
-- `PUT /api/matches/:matchId/ai-squad-apply` (admin)
-
-### Stats
-- `POST /api/stats/cricket` (admin)
-- `PUT /api/stats/cricket/update` (admin)
-- `POST /api/stats/football` (admin)
-- `PUT /api/stats/football/update` (admin)
-
-## Real-Time Testing
-
-Open:
-
-- `http://localhost:5000/test-socket.html`
-
-Then trigger cricket/football score update API requests.  
-You should receive live `scoreUpdate` events in the browser.
-
-## Notes
-
-- Use **Player `_id`** from `players` collection when updating player stats.
-- Role-based APIs require `Authorization: Bearer <token>`.
-- AI squad ranking is heuristic-based (transparent formulas in `gosport-backend/utils/aiSquad.js`).
-
+### Stats & Performance (`/api/stats` & `/api/players`)
+- `PUT /api/stats/cricket/update` - Update cricket match statistics (Admin)
+- `PUT /api/stats/football/update` - Update football match statistics (Admin)
+- `GET /api/players/:id/stats` - Fetch player career performance
+- `GET /api/public/players/:id/skills` - Public summary of player skills

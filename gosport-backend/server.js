@@ -23,7 +23,7 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-// Serve test page for Socket.io: open http://localhost:5000/test-socket.html in browser
+// Static public files
 const path = require("path");
 app.use(express.static(path.join(__dirname, "public")));
 
