@@ -24,7 +24,6 @@ export default function MatchDetail() {
   const [statsLoading, setStatsLoading] = useState(false);
   const [runsInput, setRunsInput] = useState(0);
   const [isWicketInput, setIsWicketInput] = useState(false);
-  const [wicketBowlerId, setWicketBowlerId] = useState("");
   const [footballStats, setFootballStats] = useState({ goals: 0, assists: 0, yellowCards: 0, redCards: 0, minutesPlayed: 0 });
   const [aiTeam, setAiTeam] = useState("");
 
