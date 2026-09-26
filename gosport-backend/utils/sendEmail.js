@@ -4,8 +4,18 @@ const Mailgen = require("mailgen");
 function createTransporter() {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
 
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
-    throw new Error("SMTP is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS in .env");
+  if (!SMTP_USER || !SMTP_PASS) {
+    throw new Error("SMTP is not configured. Set SMTP_USER and SMTP_PASS in .env");
+  }
+
+  if (!SMTP_HOST || SMTP_HOST.toLowerCase().includes("gmail")) {
+    return nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS,
+      },
+    });
   }
 
   return nodemailer.createTransport({
