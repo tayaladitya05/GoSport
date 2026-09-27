@@ -1,37 +1,8 @@
-const dns = require("dns");
-if (dns.setDefaultResultOrder) {
-  dns.setDefaultResultOrder("ipv4first");
-}
-
+const { Resend } = require("resend");
 const nodemailer = require("nodemailer");
 const Mailgen = require("mailgen");
 
-function createTransporter() {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
-
-  if (!SMTP_USER || !SMTP_PASS) {
-    throw new Error("SMTP credentials missing. Please set SMTP_USER and SMTP_PASS in server environment variables.");
-  }
-
-  const port = Number(SMTP_PORT) || 587;
-  const isSecure = port === 465;
-
-  return nodemailer.createTransport({
-    host: SMTP_HOST || "smtp.gmail.com",
-    port: port,
-    secure: isSecure,
-    family: 4, // Explicitly enforce IPv4 (avoids ENETUNREACH IPv6 routing errors on cloud platforms like Render)
-    auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS,
-    },
-    connectionTimeout: 15000,
-    greetingTimeout: 10000,
-    socketTimeout: 20000,
-  });
-}
-
-async function sendEmail({ to, name, subject, intro, instructions, buttonText, link, outro }) {
+function createMailContent({ name, intro, instructions, buttonText, link, outro }) {
   const mailGenerator = new Mailgen({
     theme: "default",
     product: {
@@ -56,10 +27,60 @@ async function sendEmail({ to, name, subject, intro, instructions, buttonText, l
     },
   };
 
-  const html = mailGenerator.generate(email);
-  const text = mailGenerator.generatePlaintext(email);
+  return {
+    html: mailGenerator.generate(email),
+    text: mailGenerator.generatePlaintext(email),
+  };
+}
 
-  await createTransporter().sendMail({
+async function sendEmail({ to, name, subject, intro, instructions, buttonText, link, outro }) {
+  const { html, text } = createMailContent({ name, intro, instructions, buttonText, link, outro });
+
+  // 1. Primary: Resend HTTPS API (Works 100% on Render, Vercel, and Cloud - Port 443)
+  if (process.env.RESEND_API_KEY) {
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const fromAddress = process.env.MAIL_FROM || "GoSport <onboarding@resend.dev>";
+
+    const { data, error } = await resend.emails.send({
+      from: fromAddress,
+      to: [to],
+      subject,
+      html,
+      text,
+    });
+
+    if (error) {
+      console.error("Resend API error:", error);
+      throw new Error(error.message || "Failed to send email via Resend API");
+    }
+
+    return data;
+  }
+
+  // 2. Fallback: Nodemailer SMTP
+  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
+  if (!SMTP_USER || !SMTP_PASS) {
+    throw new Error("No email provider configured. Please set RESEND_API_KEY in environment variables.");
+  }
+
+  const port = Number(SMTP_PORT) || 587;
+  const isSecure = port === 465;
+
+  const transporter = nodemailer.createTransport({
+    host: SMTP_HOST || "smtp.gmail.com",
+    port: port,
+    secure: isSecure,
+    family: 4,
+    auth: {
+      user: SMTP_USER,
+      pass: SMTP_PASS,
+    },
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
+  });
+
+  return await transporter.sendMail({
     from: process.env.MAIL_FROM || process.env.SMTP_USER,
     to,
     subject,
