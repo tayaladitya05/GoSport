@@ -13,26 +13,14 @@ function createTransporter() {
     throw new Error("SMTP credentials missing. Please set SMTP_USER and SMTP_PASS in server environment variables.");
   }
 
-  const isGmail = !SMTP_HOST || SMTP_HOST.toLowerCase().includes("gmail");
-
-  if (isGmail) {
-    return nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: SMTP_USER,
-        pass: SMTP_PASS,
-      },
-      connectionTimeout: 15000,
-      greetingTimeout: 10000,
-      socketTimeout: 20000,
-    });
-  }
-
   const port = Number(SMTP_PORT) || 587;
+  const isSecure = port === 465;
+
   return nodemailer.createTransport({
-    host: SMTP_HOST,
+    host: SMTP_HOST || "smtp.gmail.com",
     port: port,
-    secure: port === 465,
+    secure: isSecure,
+    family: 4, // Explicitly enforce IPv4 (avoids ENETUNREACH IPv6 routing errors on cloud platforms like Render)
     auth: {
       user: SMTP_USER,
       pass: SMTP_PASS,
