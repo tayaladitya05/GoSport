@@ -213,12 +213,12 @@ export default function Login() {
                   className="spec-btn"
                   style={{ marginBottom:16 }}
                   onClick={async () => {
-                    setResendNote('');
+                    setResendNote(null);
                     try {
                       const data = await resendVerification(email);
-                      setResendNote(data.message);
+                      setResendNote({ type: 'success', text: data.message });
                     } catch (err) {
-                      setResendNote(err.response?.data?.message || 'Could not resend email');
+                      setResendNote({ type: 'error', text: err.response?.data?.message || 'Could not resend email' });
                     }
                   }}
                 >
@@ -226,7 +226,9 @@ export default function Login() {
                 </button>
               )}
               {resendNote && (
-                <p style={{ color:'#4cda7f', fontSize:12, marginBottom:16 }}>{resendNote}</p>
+                <p style={{ color: resendNote.type === 'error' ? 'var(--error)' : '#4cda7f', fontSize:12, marginBottom:16 }}>
+                  {resendNote.text}
+                </p>
               )}
 
               <button type="submit" className="signin-btn" disabled={loading}>

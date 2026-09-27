@@ -20,21 +20,25 @@ export default function SpectatorRegister() {
     if (form.password.length < 6)       { setError('Password must be at least 6 characters'); return; }
     setLoading(true);
     try {
-      await register({ name:form.name, email:form.email, password:form.password, role:'spectator' });
-      setPendingEmail(form.email);
+      const res = await register({ name:form.name, email:form.email, password:form.password, role:'spectator' });
+      if (res && res.emailSent === false) {
+        setError(res.message || 'Account created, but verification email could not be sent. Please check SMTP settings.');
+      } else {
+        setPendingEmail(form.email);
+      }
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.message || 'Registration failed');
     } finally { setLoading(false); }
   };
 
   const handleResend = async () => {
-    setResendNote('');
+    setResendNote(null);
     setResending(true);
     try {
       const data = await resendVerification(pendingEmail);
-      setResendNote(data.message);
+      setResendNote({ type: 'success', text: data.message });
     } catch (err) {
-      setResendNote(err.response?.data?.message || 'Could not resend email');
+      setResendNote({ type: 'error', text: err.response?.data?.message || 'Could not resend email' });
     } finally { setResending(false); }
   };
 
@@ -135,7 +139,9 @@ export default function SpectatorRegister() {
               Open it to activate your spectator account, then sign in.
             </p>
             {resendNote && (
-              <p style={{ color:'#4cda7f', fontSize:12, textAlign:'center', marginBottom:14 }}>{resendNote}</p>
+              <p style={{ color: resendNote.type === 'error' ? 'var(--error)' : '#4cda7f', fontSize:12, textAlign:'center', marginBottom:14 }}>
+                {resendNote.text}
+              </p>
             )}
             <button type="button" className="sreg-submit" disabled={resending} onClick={handleResend}>
               {resending ? 'Sending…' : 'Resend verification email'}

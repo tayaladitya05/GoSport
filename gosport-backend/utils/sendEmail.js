@@ -10,30 +10,37 @@ function createTransporter() {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
 
   if (!SMTP_USER || !SMTP_PASS) {
-    throw new Error("SMTP is not configured. Set SMTP_USER and SMTP_PASS in .env");
+    throw new Error("SMTP credentials missing. Please set SMTP_USER and SMTP_PASS in server environment variables.");
+  }
+
+  const isGmail = !SMTP_HOST || SMTP_HOST.toLowerCase().includes("gmail");
+
+  if (isGmail) {
+    return nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS,
+      },
+      connectionTimeout: 15000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
+    });
   }
 
   const port = Number(SMTP_PORT) || 587;
-  const isGmail = !SMTP_HOST || SMTP_HOST.toLowerCase().includes("gmail");
-
-  const transportConfig = {
-    host: SMTP_HOST || "smtp.gmail.com",
+  return nodemailer.createTransport({
+    host: SMTP_HOST,
     port: port,
     secure: port === 465,
     auth: {
       user: SMTP_USER,
       pass: SMTP_PASS,
     },
-    connectionTimeout: 10000,
+    connectionTimeout: 15000,
     greetingTimeout: 10000,
-    socketTimeout: 15000,
-  };
-
-  if (isGmail && !SMTP_PORT) {
-    transportConfig.service = "gmail";
-  }
-
-  return nodemailer.createTransport(transportConfig);
+    socketTimeout: 20000,
+  });
 }
 
 async function sendEmail({ to, name, subject, intro, instructions, buttonText, link, outro }) {

@@ -68,12 +68,22 @@ exports.register = async (req, res) => {
       if (existing.role === "spectator" && !existing.isVerified) {
         existing.name = name;
         existing.password = hashedPassword;
-        await issueVerificationEmail(existing);
-        return res.status(200).json({
-          message: "An unverified account already exists. A new verification email has been sent.",
-          requiresVerification: true,
-          emailSent: true,
-        });
+        await existing.save();
+        try {
+          await issueVerificationEmail(existing);
+          return res.status(200).json({
+            message: "An unverified account already exists. A new verification email has been sent.",
+            requiresVerification: true,
+            emailSent: true,
+          });
+        } catch (mailErr) {
+          console.error("Verification email failed on update:", mailErr.message);
+          return res.status(200).json({
+            message: "Account updated, but verification email could not be sent: " + (mailErr.message || "Check SMTP settings."),
+            requiresVerification: true,
+            emailSent: false,
+          });
+        }
       }
       return res.status(400).json({ message: "An account with this email already exists" });
     }
@@ -108,7 +118,7 @@ exports.register = async (req, res) => {
       } catch (mailErr) {
         console.error("Verification email failed:", mailErr.message);
         return res.status(201).json({
-          message: "Account created, but the verification email could not be sent. Use resend verification.",
+          message: "Account created, but verification email could not be sent: " + (mailErr.message || "Check SMTP settings."),
           requiresVerification: true,
           emailSent: false,
         });
@@ -227,11 +237,18 @@ exports.resendVerification = async (req, res) => {
       return res.json({ message: "This account is already verified. You can sign in." });
     }
 
-    await issueVerificationEmail(user);
-    res.json({ message: "A new verification email has been sent." });
+    try {
+      await issueVerificationEmail(user);
+      res.json({ message: "A new verification email has been sent." });
+    } catch (mailErr) {
+      console.error("Resend verification failed:", mailErr.message);
+      res.status(500).json({
+        message: "Could not send verification email: " + (mailErr.message || "Check SMTP settings in environment variables.")
+      });
+    }
   } catch (err) {
-    console.error("Resend verification failed:", err.message);
-    res.status(500).json({ message: "Could not send verification email. Check SMTP settings." });
+    console.error("Resend verification controller error:", err.message);
+    res.status(500).json({ message: "Error processing resend verification: " + err.message });
   }
 };
 
