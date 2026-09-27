@@ -1,8 +1,3 @@
-const dns = require("dns");
-if (dns.setDefaultResultOrder) {
-  dns.setDefaultResultOrder("ipv4first");
-}
-
 require("dotenv").config();
 const http = require("http");
 const express = require("express");

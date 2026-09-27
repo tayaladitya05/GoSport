@@ -318,7 +318,7 @@ exports.forgotPassword = async (req, res) => {
       user.resetPasswordToken = null;
       user.resetPasswordExpires = null;
       await user.save();
-      return res.status(500).json({ message: "Could not send reset email. Check SMTP settings." });
+      return res.status(500).json({ message: "Could not send reset email: " + (mailErr.message || "Please check email service configuration.") });
     }
 
     return res.json({ message: FORGOT_PASSWORD_MESSAGE });
