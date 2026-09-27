@@ -1,3 +1,8 @@
+const dns = require("dns");
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder("ipv4first");
+}
+
 const nodemailer = require("nodemailer");
 const Mailgen = require("mailgen");
 
@@ -8,25 +13,27 @@ function createTransporter() {
     throw new Error("SMTP is not configured. Set SMTP_USER and SMTP_PASS in .env");
   }
 
-  if (!SMTP_HOST || SMTP_HOST.toLowerCase().includes("gmail")) {
-    return nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: SMTP_USER,
-        pass: SMTP_PASS,
-      },
-    });
-  }
+  const port = Number(SMTP_PORT) || 587;
+  const isGmail = !SMTP_HOST || SMTP_HOST.toLowerCase().includes("gmail");
 
-  return nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: Number(SMTP_PORT) || 587,
-    secure: Number(SMTP_PORT) === 465,
+  const transportConfig = {
+    host: SMTP_HOST || "smtp.gmail.com",
+    port: port,
+    secure: port === 465,
     auth: {
       user: SMTP_USER,
       pass: SMTP_PASS,
     },
-  });
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+  };
+
+  if (isGmail && !SMTP_PORT) {
+    transportConfig.service = "gmail";
+  }
+
+  return nodemailer.createTransport(transportConfig);
 }
 
 async function sendEmail({ to, name, subject, intro, instructions, buttonText, link, outro }) {

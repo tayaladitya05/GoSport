@@ -65,6 +65,16 @@ exports.register = async (req, res) => {
 
     const existing = await User.findOne({ email });
     if (existing) {
+      if (existing.role === "spectator" && !existing.isVerified) {
+        existing.name = name;
+        existing.password = hashedPassword;
+        await issueVerificationEmail(existing);
+        return res.status(200).json({
+          message: "An unverified account already exists. A new verification email has been sent.",
+          requiresVerification: true,
+          emailSent: true,
+        });
+      }
       return res.status(400).json({ message: "An account with this email already exists" });
     }
     
